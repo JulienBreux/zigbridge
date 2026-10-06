@@ -353,3 +353,116 @@ func TestImportA7Z(t *testing.T) {
 		t.Errorf("expected energy telemetry simulation")
 	}
 }
+
+func TestImportIASZoneAndACEAndWD(t *testing.T) {
+	// 1. Water Leak Sensor (E2202)
+	leakHTML := `<!DOCTYPE html>
+<html>
+<head><title>IKEA E2202 control via MQTT | Zigbee2MQTT</title></head>
+<body>
+    <h1>E2202</h1>
+    <table>
+        <tr><td>Model</td><td>E2202</td></tr>
+        <tr><td>Vendor</td><td>IKEA</td></tr>
+        <tr><td>Description</td><td>BADRING water leakage sensor</td></tr>
+        <tr><td>Exposes</td><td><a href="/water_leak">water_leak</a>, <a href="/battery">battery</a>, <a href="/voltage">voltage</a></td></tr>
+    </table>
+</body></html>`
+
+	imp := fixture.NewImporter(nil)
+	leakDef, err := imp.ImportFromHTML(leakHTML, "https://www.zigbee2mqtt.io/devices/E2202.html")
+	if err != nil {
+		t.Fatalf("ImportFromHTML leak failed: %v", err)
+	}
+	if leakDef.Device.Endpoints[0].DeviceID != 0x0402 {
+		t.Errorf("expected DeviceID 0x0402 for leak sensor, got 0x%04X", leakDef.Device.Endpoints[0].DeviceID)
+	}
+	if !slices.Contains(leakDef.Device.Endpoints[0].InputClusters, 0x0500) {
+		t.Errorf("expected IAS Zone cluster 0x0500 in input clusters: %v", leakDef.Device.Endpoints[0].InputClusters)
+	}
+	if _, ok := leakDef.Device.Simulations.Actions["leak"]; !ok {
+		t.Errorf("expected 'leak' simulation action")
+	}
+
+	// 2. Contact Sensor (MCCGQ11LM)
+	contactHTML := `<!DOCTYPE html>
+<html>
+<head><title>Aqara MCCGQ11LM control via MQTT | Zigbee2MQTT</title></head>
+<body>
+    <h1>MCCGQ11LM</h1>
+    <table>
+        <tr><td>Model</td><td>MCCGQ11LM</td></tr>
+        <tr><td>Vendor</td><td>Aqara</td></tr>
+        <tr><td>Description</td><td>Door and window sensor</td></tr>
+        <tr><td>Exposes</td><td><a href="/contact">contact</a>, <a href="/battery">battery</a>, <a href="/voltage">voltage</a></td></tr>
+    </table>
+</body></html>`
+
+	contactDef, err := imp.ImportFromHTML(contactHTML, "https://www.zigbee2mqtt.io/devices/MCCGQ11LM.html")
+	if err != nil {
+		t.Fatalf("ImportFromHTML contact failed: %v", err)
+	}
+	// Check battery voltage is mV not mains V
+	for _, exp := range contactDef.Device.Exposes {
+		if exp.Property == "voltage" && exp.Unit != "mV" {
+			t.Errorf("expected contact sensor voltage in mV, got %s", exp.Unit)
+		}
+	}
+	if _, ok := contactDef.Device.Simulations.Actions["open"]; !ok {
+		t.Errorf("expected 'open' simulation action")
+	}
+
+	// 3. Siren (SIRZB-111)
+	sirenHTML := `<!DOCTYPE html>
+<html>
+<head><title>Develco SIRZB-111 control via MQTT | Zigbee2MQTT</title></head>
+<body>
+    <h1>SIRZB-111</h1>
+    <table>
+        <tr><td>Model</td><td>SIRZB-111</td></tr>
+        <tr><td>Vendor</td><td>Develco</td></tr>
+        <tr><td>Description</td><td>Customizable siren</td></tr>
+        <tr><td>Exposes</td><td><a href="/warning">warning</a>, <a href="/squawk">squawk</a>, <a href="/battery">battery</a></td></tr>
+    </table>
+</body></html>`
+
+	sirenDef, err := imp.ImportFromHTML(sirenHTML, "https://www.zigbee2mqtt.io/devices/SIRZB-111.html")
+	if err != nil {
+		t.Fatalf("ImportFromHTML siren failed: %v", err)
+	}
+	if sirenDef.Device.Endpoints[0].DeviceID != 0x0403 {
+		t.Errorf("expected DeviceID 0x0403 for siren, got 0x%04X", sirenDef.Device.Endpoints[0].DeviceID)
+	}
+	if !slices.Contains(sirenDef.Device.Endpoints[0].InputClusters, 0x0502) {
+		t.Errorf("expected IAS WD cluster 0x0502 in input clusters: %v", sirenDef.Device.Endpoints[0].InputClusters)
+	}
+
+	// 4. Keypad (KEYZB-110)
+	keypadHTML := `<!DOCTYPE html>
+<html>
+<head><title>Develco KEYZB-110 control via MQTT | Zigbee2MQTT</title></head>
+<body>
+    <h1>KEYZB-110</h1>
+    <table>
+        <tr><td>Model</td><td>KEYZB-110</td></tr>
+        <tr><td>Vendor</td><td>Develco</td></tr>
+        <tr><td>Description</td><td>Keypad</td></tr>
+        <tr><td>Exposes</td><td><a href="/action">action</a>, <a href="/battery">battery</a>, <a href="/tamper">tamper</a></td></tr>
+    </table>
+    <div class="content">
+        <h3>Action (enum)</h3>
+        <p>Values: <code>disarm</code>, <code>arm_day_zones</code>, <code>arm_night_zones</code>, <code>arm_all_zones</code>, <code>emergency</code>, <code>panic</code>.</p>
+    </div>
+</body></html>`
+
+	keypadDef, err := imp.ImportFromHTML(keypadHTML, "https://www.zigbee2mqtt.io/devices/KEYZB-110.html")
+	if err != nil {
+		t.Fatalf("ImportFromHTML keypad failed: %v", err)
+	}
+	if !slices.Contains(keypadDef.Device.Endpoints[0].InputClusters, 0x0501) {
+		t.Errorf("expected IAS ACE cluster 0x0501 in input clusters: %v", keypadDef.Device.Endpoints[0].InputClusters)
+	}
+	if _, ok := keypadDef.Device.Simulations.Actions["disarm"]; !ok {
+		t.Errorf("expected 'disarm' simulation action for keypad")
+	}
+}

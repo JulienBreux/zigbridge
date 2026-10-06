@@ -368,17 +368,41 @@ func extractRegex(src, pattern string) string {
 	return ""
 }
 
+func extractActionValues(htmlContent string) []string {
+	reSection := regexp.MustCompile(`(?i)(?:<h3>\s*action\b|<h[23][^>]*id="action")[^<]*(?:<[^>]+>)*([\s\S]*?)(?:<h[23]|\z)`)
+	m := reSection.FindStringSubmatch(htmlContent)
+	var values []string
+	if len(m) > 1 {
+		sectionText := m[1]
+		reCode := regexp.MustCompile(`<code>([^<]+)</code>`)
+		codeMatches := reCode.FindAllStringSubmatch(sectionText, -1)
+		for _, cm := range codeMatches {
+			val := strings.TrimSpace(cm[1])
+			if val != "" && !slices.Contains(values, val) && !strings.Contains(val, " ") && len(val) < 40 {
+				values = append(values, val)
+			}
+		}
+	}
+	return values
+}
+
 func detectExposesFromHTML(htmlContent string) []ExposeDef {
 	var exposes []ExposeDef
 	lower := strings.ToLower(htmlContent)
 
-	exposesRaw := extractRegex(htmlContent, `(?i)<tr>\s*<td>\s*Exposes\s*</td>\s*<td>\s*([^<]+?)\s*</td>`)
+	exposesRaw := extractRegex(htmlContent, `(?i)<tr>\s*<td>\s*Exposes\s*</td>\s*<td>([\s\S]*?)</td>`)
 	if exposesRaw != "" {
-		tokens := strings.Split(exposesRaw, ",")
-		rawLower := strings.ToLower(exposesRaw)
+		tagRegex := regexp.MustCompile(`<[^>]*>`)
+		cleanedExposes := tagRegex.ReplaceAllString(exposesRaw, "")
+		tokens := strings.Split(cleanedExposes, ",")
+		rawLower := strings.ToLower(cleanedExposes)
 
-		isMains := strings.Contains(rawLower, "power") || strings.Contains(rawLower, "energy") ||
-			strings.Contains(rawLower, "current") || strings.Contains(rawLower, "switch") || strings.Contains(rawLower, "plug")
+		hasBattery := strings.Contains(rawLower, "battery")
+		isMains := !hasBattery && (strings.Contains(rawLower, "power") || strings.Contains(rawLower, "energy") ||
+			strings.Contains(rawLower, "current") || strings.Contains(rawLower, "plug") ||
+			(strings.Contains(rawLower, "switch") && !strings.Contains(rawLower, "wireless") && !strings.Contains(rawLower, "button")))
+
+		actionValues := extractActionValues(htmlContent)
 
 		for _, t := range tokens {
 			token := strings.TrimSpace(strings.ToLower(t))
@@ -405,6 +429,39 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 						Access:      1,
 					})
 				}
+			case "power_a":
+				if !hasProperty(exposes, "power_a") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "power_a",
+						Property:    "power_a",
+						Description: "Instantaneous measured power on phase A",
+						Unit:        "W",
+						Access:      1,
+					})
+				}
+			case "power_b":
+				if !hasProperty(exposes, "power_b") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "power_b",
+						Property:    "power_b",
+						Description: "Instantaneous measured power on phase B",
+						Unit:        "W",
+						Access:      1,
+					})
+				}
+			case "power_ab":
+				if !hasProperty(exposes, "power_ab") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "power_ab",
+						Property:    "power_ab",
+						Description: "Sum of instantaneous measured power",
+						Unit:        "W",
+						Access:      1,
+					})
+				}
 			case "current":
 				if !hasProperty(exposes, "current") {
 					exposes = append(exposes, ExposeDef{
@@ -412,6 +469,28 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 						Name:        "current",
 						Property:    "current",
 						Description: "Instantaneous measured electrical current",
+						Unit:        "A",
+						Access:      1,
+					})
+				}
+			case "current_a":
+				if !hasProperty(exposes, "current_a") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "current_a",
+						Property:    "current_a",
+						Description: "Instantaneous measured electrical current on phase A",
+						Unit:        "A",
+						Access:      1,
+					})
+				}
+			case "current_b":
+				if !hasProperty(exposes, "current_b") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "current_b",
+						Property:    "current_b",
+						Description: "Instantaneous measured electrical current on phase B",
 						Unit:        "A",
 						Access:      1,
 					})
@@ -452,14 +531,40 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 						Access:      1,
 					})
 				}
+			case "energy_a":
+				if !hasProperty(exposes, "energy_a") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "energy_a",
+						Property:    "energy_a",
+						Description: "Sum of consumed energy on phase A",
+						Unit:        "kWh",
+						Access:      1,
+					})
+				}
+			case "energy_b":
+				if !hasProperty(exposes, "energy_b") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "energy_b",
+						Property:    "energy_b",
+						Description: "Sum of consumed energy on phase B",
+						Unit:        "kWh",
+						Access:      1,
+					})
+				}
 			case "action":
 				if !hasProperty(exposes, "action") {
+					vals := actionValues
+					if len(vals) == 0 {
+						vals = []string{"single", "double", "long"}
+					}
 					exposes = append(exposes, ExposeDef{
 						Type:        "enum",
 						Name:        "action",
 						Property:    "action",
 						Description: "Triggered action (e.g. a button press)",
-						Values:      []string{"single", "double", "long"},
+						Values:      vals,
 						Access:      1,
 					})
 				}
@@ -477,13 +582,28 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 						Access:      1,
 					})
 				}
-			case "temperature":
-				if !hasProperty(exposes, "temperature") {
+			case "battery_low":
+				if !hasProperty(exposes, "battery_low") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "binary",
+						Name:        "battery_low",
+						Property:    "battery_low",
+						Description: "Empty battery indicator",
+						Values:      []string{"true", "false"},
+						Access:      1,
+					})
+				}
+			case "temperature", "device_temperature":
+				prop := "temperature"
+				if token == "device_temperature" {
+					prop = "device_temperature"
+				}
+				if !hasProperty(exposes, prop) {
 					minVal, maxVal := -20.0, 60.0
 					exposes = append(exposes, ExposeDef{
 						Type:        "numeric",
-						Name:        "temperature",
-						Property:    "temperature",
+						Name:        prop,
+						Property:    prop,
 						Description: "Measured temperature value",
 						Unit:        "°C",
 						Min:         &minVal,
@@ -515,6 +635,70 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 						Access:      1,
 					})
 				}
+			case "water_leak", "water_leakage", "leak":
+				if !hasProperty(exposes, "water_leak") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "binary",
+						Name:        "water_leak",
+						Property:    "water_leak",
+						Description: "Indicates whether the device detected a water leak",
+						Values:      []string{"true", "false"},
+						Access:      1,
+					})
+				}
+			case "contact":
+				if !hasProperty(exposes, "contact") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "binary",
+						Name:        "contact",
+						Property:    "contact",
+						Description: "Indicates whether the contact is closed (true) or open (false)",
+						Values:      []string{"true", "false"},
+						Access:      1,
+					})
+				}
+			case "tamper":
+				if !hasProperty(exposes, "tamper") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "binary",
+						Name:        "tamper",
+						Property:    "tamper",
+						Description: "Indicates whether the device is tampered",
+						Values:      []string{"true", "false"},
+						Access:      1,
+					})
+				}
+			case "smoke":
+				if !hasProperty(exposes, "smoke") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "binary",
+						Name:        "smoke",
+						Property:    "smoke",
+						Description: "Indicates whether the device detected smoke",
+						Values:      []string{"true", "false"},
+						Access:      1,
+					})
+				}
+			case "warning":
+				if !hasProperty(exposes, "warning") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "composite",
+						Name:        "warning",
+						Property:    "warning",
+						Description: "Trigger siren warning",
+						Access:      2,
+					})
+				}
+			case "squawk":
+				if !hasProperty(exposes, "squawk") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "composite",
+						Name:        "squawk",
+						Property:    "squawk",
+						Description: "Trigger siren squawk",
+						Access:      2,
+					})
+				}
 			}
 		}
 
@@ -535,26 +719,29 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 	}
 
 	// Fallback to HTML header & keyword analysis
-	isMains := strings.Contains(lower, `power`) || strings.Contains(lower, `energy`) ||
+	hasBattery := strings.Contains(lower, `battery`)
+	isMains := !hasBattery && (strings.Contains(lower, `power`) || strings.Contains(lower, `energy`) ||
 		strings.Contains(lower, `current`) || strings.Contains(lower, `plug`) ||
-		strings.Contains(lower, `bulb`) || (strings.Contains(lower, `switch`) && !strings.Contains(lower, `wireless button`))
+		strings.Contains(lower, `bulb`) || (strings.Contains(lower, `switch`) && !strings.Contains(lower, `wireless`) && !strings.Contains(lower, `button`)))
 
-	// Action (button) - ensure it's an actual button action, not switch_type_button
+	// Action (button)
 	hasActionHeader := strings.Contains(lower, `<h3>action`) || strings.Contains(lower, `id="action`) ||
 		(strings.Contains(lower, `action (enum)`) && !strings.Contains(lower, `switch_type_button`))
 	if hasActionHeader || (!isMains && strings.Contains(lower, `action`) && (strings.Contains(lower, `single`) || strings.Contains(lower, `button`))) {
-		var values []string
-		if strings.Contains(lower, `single`) {
-			values = append(values, "single")
-		}
-		if strings.Contains(lower, `double`) {
-			values = append(values, "double")
-		}
-		if strings.Contains(lower, `long`) || strings.Contains(lower, `hold`) {
-			values = append(values, "long")
-		}
+		values := extractActionValues(htmlContent)
 		if len(values) == 0 {
-			values = []string{"single", "double", "long"}
+			if strings.Contains(lower, `single`) {
+				values = append(values, "single")
+			}
+			if strings.Contains(lower, `double`) {
+				values = append(values, "double")
+			}
+			if strings.Contains(lower, `long`) || strings.Contains(lower, `hold`) {
+				values = append(values, "long")
+			}
+			if len(values) == 0 {
+				values = []string{"single", "double", "long"}
+			}
 		}
 		exposes = append(exposes, ExposeDef{
 			Type:        "enum",
@@ -695,6 +882,41 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 		})
 	}
 
+	// Water leak
+	if strings.Contains(lower, `water_leak`) || strings.Contains(lower, `leakage`) {
+		exposes = append(exposes, ExposeDef{
+			Type:        "binary",
+			Name:        "water_leak",
+			Property:    "water_leak",
+			Description: "Indicates whether the device detected a water leak",
+			Values:      []string{"true", "false"},
+			Access:      1,
+		})
+	}
+
+	// Contact
+	if strings.Contains(lower, `contact`) {
+		exposes = append(exposes, ExposeDef{
+			Type:        "binary",
+			Name:        "contact",
+			Property:    "contact",
+			Description: "Indicates whether the contact is closed (true) or open (false)",
+			Values:      []string{"true", "false"},
+			Access:      1,
+		})
+	}
+
+	// Warning / Siren
+	if strings.Contains(lower, `warning`) || strings.Contains(lower, `siren`) {
+		exposes = append(exposes, ExposeDef{
+			Type:        "composite",
+			Name:        "warning",
+			Property:    "warning",
+			Description: "Trigger siren warning",
+			Access:      2,
+		})
+	}
+
 	// Occupancy
 	if strings.Contains(lower, `occupancy`) || strings.Contains(lower, `motion`) {
 		exposes = append(exposes, ExposeDef{
@@ -740,11 +962,29 @@ func inferArchitecture(exposes []ExposeDef) ([]EndpointDef, SimulationDef) {
 	isButton := false
 	hasBattery := false
 	isMetering := false
+	hasWaterLeak := hasProperty(exposes, "water_leak")
+	hasContact := hasProperty(exposes, "contact")
+	hasWarning := hasProperty(exposes, "warning") || hasProperty(exposes, "squawk")
+	hasTamper := hasProperty(exposes, "tamper")
+	hasSmoke := hasProperty(exposes, "smoke")
 
 	hasState := hasProperty(exposes, "state")
-	hasPower := hasProperty(exposes, "power")
-	hasEnergy := hasProperty(exposes, "energy")
-	hasCurrent := hasProperty(exposes, "current")
+	hasPower := hasProperty(exposes, "power") || hasProperty(exposes, "power_a")
+	hasEnergy := hasProperty(exposes, "energy") || hasProperty(exposes, "energy_a")
+	hasCurrent := hasProperty(exposes, "current") || hasProperty(exposes, "current_a")
+
+	// Check if this is a keypad controller
+	hasKeypadAction := false
+	for _, exp := range exposes {
+		if exp.Property == "action" {
+			for _, v := range exp.Values {
+				if v == "disarm" || v == "arm_day_zones" || v == "arm_all_zones" || v == "emergency" || v == "panic" {
+					hasKeypadAction = true
+					break
+				}
+			}
+		}
+	}
 
 	if hasPower || hasEnergy || hasCurrent {
 		isMetering = true
@@ -780,25 +1020,144 @@ func inferArchitecture(exposes []ExposeDef) ([]EndpointDef, SimulationDef) {
 		}
 	}
 
+	if hasWaterLeak || hasContact || hasTamper || hasSmoke {
+		inClusters = append(inClusters, 0x0500) // IASZone
+		if hasWaterLeak {
+			telemetry["water_leak"] = TelemetrySim{
+				Cluster:   0x0500,
+				Attribute: 0x0002,
+			}
+			actions["leak"] = ActionSim{
+				Cluster:     0x0500,
+				Command:     0x00,
+				Payload:     []byte{0x01, 0x00},
+				MQTTPayload: map[string]any{"water_leak": true},
+			}
+			actions["no_leak"] = ActionSim{
+				Cluster:     0x0500,
+				Command:     0x00,
+				Payload:     []byte{0x00, 0x00},
+				MQTTPayload: map[string]any{"water_leak": false},
+			}
+		}
+		if hasContact {
+			telemetry["contact"] = TelemetrySim{
+				Cluster:   0x0500,
+				Attribute: 0x0002,
+			}
+			actions["open"] = ActionSim{
+				Cluster:     0x0500,
+				Command:     0x00,
+				Payload:     []byte{0x01, 0x00},
+				MQTTPayload: map[string]any{"contact": false},
+			}
+			actions["closed"] = ActionSim{
+				Cluster:     0x0500,
+				Command:     0x00,
+				Payload:     []byte{0x00, 0x00},
+				MQTTPayload: map[string]any{"contact": true},
+			}
+		}
+	}
+
+	if hasWarning {
+		inClusters = append(inClusters, 0x0500, 0x0502) // IASZone + IASWD
+		actions["warning"] = ActionSim{
+			Cluster:     0x0502,
+			Command:     0x00,
+			MQTTPayload: map[string]any{"warning": map[string]any{"mode": "burglar", "level": "very_high"}},
+		}
+		actions["squawk"] = ActionSim{
+			Cluster:     0x0502,
+			Command:     0x01,
+			MQTTPayload: map[string]any{"squawk": map[string]any{"state": "system_is_armed"}},
+		}
+	}
+
+	if hasKeypadAction {
+		inClusters = append(inClusters, 0x0500, 0x0501)
+		outClusters = append(outClusters, 0x0501)
+		actions["disarm"] = ActionSim{
+			Cluster:     0x0501,
+			Command:     0x00,
+			Payload:     []byte{0x00},
+			MQTTPayload: map[string]any{"action": "disarm"},
+		}
+		actions["arm_day_zones"] = ActionSim{
+			Cluster:     0x0501,
+			Command:     0x00,
+			Payload:     []byte{0x01},
+			MQTTPayload: map[string]any{"action": "arm_day_zones"},
+		}
+		actions["arm_night_zones"] = ActionSim{
+			Cluster:     0x0501,
+			Command:     0x00,
+			Payload:     []byte{0x02},
+			MQTTPayload: map[string]any{"action": "arm_night_zones"},
+		}
+		actions["arm_all_zones"] = ActionSim{
+			Cluster:     0x0501,
+			Command:     0x00,
+			Payload:     []byte{0x03},
+			MQTTPayload: map[string]any{"action": "arm_all_zones"},
+		}
+		actions["panic"] = ActionSim{
+			Cluster:     0x0501,
+			Command:     0x04,
+			MQTTPayload: map[string]any{"action": "panic"},
+		}
+		actions["emergency"] = ActionSim{
+			Cluster:     0x0501,
+			Command:     0x02,
+			MQTTPayload: map[string]any{"action": "emergency"},
+		}
+	}
+
 	for _, exp := range exposes {
 		switch exp.Property {
 		case "action":
 			isButton = true
 			outClusters = append(outClusters, 0x0006) // OnOff output
-			actions["single"] = ActionSim{
-				Cluster:     0x0006,
-				Command:     0x02, // Toggle
-				MQTTPayload: map[string]any{"action": "single"},
-			}
-			actions["double"] = ActionSim{
-				Cluster:     0x0006,
-				Command:     0x01, // On
-				MQTTPayload: map[string]any{"action": "double"},
-			}
-			actions["long"] = ActionSim{
-				Cluster:     0x0006,
-				Command:     0x00, // Off
-				MQTTPayload: map[string]any{"action": "long"},
+
+			if !hasKeypadAction {
+				hasStyrbar := slices.Contains(exp.Values, "arrow_left_click") || slices.Contains(exp.Values, "brightness_move_up")
+				hasSomrig := slices.Contains(exp.Values, "1_initial_press") || slices.Contains(exp.Values, "2_initial_press")
+
+				if hasStyrbar {
+					outClusters = append(outClusters, 0x0008, 0x0005) // LevelControl, Scenes
+					actions["on"] = ActionSim{Cluster: 0x0006, Command: 0x01, MQTTPayload: map[string]any{"action": "on"}}
+					actions["off"] = ActionSim{Cluster: 0x0006, Command: 0x00, MQTTPayload: map[string]any{"action": "off"}}
+					actions["brightness_move_up"] = ActionSim{Cluster: 0x0008, Command: 0x01, Payload: []byte{0x00}, MQTTPayload: map[string]any{"action": "brightness_move_up"}}
+					actions["brightness_move_down"] = ActionSim{Cluster: 0x0008, Command: 0x01, Payload: []byte{0x01}, MQTTPayload: map[string]any{"action": "brightness_move_down"}}
+					actions["brightness_stop"] = ActionSim{Cluster: 0x0008, Command: 0x03, MQTTPayload: map[string]any{"action": "brightness_stop"}}
+					actions["arrow_left_click"] = ActionSim{Cluster: 0x0005, Command: 0x07, Payload: []byte{0x01}, MQTTPayload: map[string]any{"action": "arrow_left_click"}}
+					actions["arrow_right_click"] = ActionSim{Cluster: 0x0005, Command: 0x07, Payload: []byte{0x00}, MQTTPayload: map[string]any{"action": "arrow_right_click"}}
+					actions["arrow_left_hold"] = ActionSim{Cluster: 0x0005, Command: 0x08, Payload: []byte{0x01}, MQTTPayload: map[string]any{"action": "arrow_left_hold"}}
+					actions["arrow_right_hold"] = ActionSim{Cluster: 0x0005, Command: 0x08, Payload: []byte{0x00}, MQTTPayload: map[string]any{"action": "arrow_right_hold"}}
+					actions["arrow_left_release"] = ActionSim{Cluster: 0x0005, Command: 0x09, Payload: []byte{0x01}, MQTTPayload: map[string]any{"action": "arrow_left_release"}}
+					actions["arrow_right_release"] = ActionSim{Cluster: 0x0005, Command: 0x09, Payload: []byte{0x00}, MQTTPayload: map[string]any{"action": "arrow_right_release"}}
+				} else if hasSomrig {
+					outClusters = append(outClusters, 0x0008)
+					for _, btn := range []string{"1", "2"} {
+						bByte := byte(0x01)
+						if btn == "2" {
+							bByte = 0x02
+						}
+						actions[btn+"_initial_press"] = ActionSim{Cluster: 0x0006, Command: 0x02, Payload: []byte{bByte}, MQTTPayload: map[string]any{"action": btn + "_initial_press"}}
+						actions[btn+"_long_press"] = ActionSim{Cluster: 0x0008, Command: 0x01, Payload: []byte{bByte}, MQTTPayload: map[string]any{"action": btn + "_long_press"}}
+						actions[btn+"_short_release"] = ActionSim{Cluster: 0x0006, Command: 0x00, Payload: []byte{bByte}, MQTTPayload: map[string]any{"action": btn + "_short_release"}}
+						actions[btn+"_long_release"] = ActionSim{Cluster: 0x0008, Command: 0x03, Payload: []byte{bByte}, MQTTPayload: map[string]any{"action": btn + "_long_release"}}
+						actions[btn+"_double_press"] = ActionSim{Cluster: 0x0006, Command: 0x01, Payload: []byte{bByte}, MQTTPayload: map[string]any{"action": btn + "_double_press"}}
+					}
+				} else {
+					actions["single"] = ActionSim{Cluster: 0x0006, Command: 0x02, MQTTPayload: map[string]any{"action": "single"}}
+					actions["double"] = ActionSim{Cluster: 0x0006, Command: 0x01, MQTTPayload: map[string]any{"action": "double"}}
+					if slices.Contains(exp.Values, "hold") {
+						actions["hold"] = ActionSim{Cluster: 0x0006, Command: 0x00, MQTTPayload: map[string]any{"action": "hold"}}
+					} else {
+						actions["long"] = ActionSim{Cluster: 0x0006, Command: 0x00, MQTTPayload: map[string]any{"action": "long"}}
+					}
+				}
 			}
 
 		case "battery", "voltage":
@@ -812,7 +1171,7 @@ func inferArchitecture(exposes []ExposeDef) ([]EndpointDef, SimulationDef) {
 				}
 			}
 
-		case "temperature":
+		case "temperature", "device_temperature":
 			inClusters = append(inClusters, 0x0402) // TemperatureMeasurement
 			telemetry["temperature"] = TelemetrySim{
 				Cluster:   0x0402,
@@ -836,10 +1195,14 @@ func inferArchitecture(exposes []ExposeDef) ([]EndpointDef, SimulationDef) {
 	}
 
 	deviceID := uint16(0x0000)
-	if isButton {
-		deviceID = 0x0401 // Non-color controller
+	if hasWarning {
+		deviceID = 0x0403 // IAS Warning Device
+	} else if hasWaterLeak || hasContact {
+		deviceID = 0x0402 // IAS Zone sensor
+	} else if isButton || hasKeypadAction {
+		deviceID = 0x0401 // Non-color controller / Keypad
 	} else if isMetering {
-		deviceID = 0x0051 // Smart Plug
+		deviceID = 0x0051 // Smart Plug / Meter
 	} else if hasState {
 		deviceID = 0x0100 // On/Off Light
 	}
