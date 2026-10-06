@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zigbridge - Smart Home Zigbee Bridge</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="mode-simple">
+  <header>
+    <div class="brand">
+      <div class="brand-icon">Z</div>
+      <div>
+        <div class="brand-title">Zigbridge</div>
+        <div class="brand-subtitle">Smart Home Zigbee Bridge</div>
+      </div>
+    </div>
+
+    <div class="header-status">
+      <!-- Coordinator Status Pill -->
+      <div id="coordinator-status-pill" class="badge badge-disconnected" title="Radio Coordinator Status">
+        <span class="indicator-dot"></span>
+        <span id="coordinator-status-text">Coordinator: Connecting</span>
+      </div>
+
+      <!-- MQTT Status Pill -->
+      <div id="mqtt-status-pill" class="badge badge-disconnected" title="Home Assistant / MQTT Broker Status">
+        <span class="indicator-dot"></span>
+        <span id="mqtt-status-text">MQTT: Connecting</span>
+      </div>
+
+      <!-- Diagnostics Drawer Button (Shows in Advanced Mode or click to inspect) -->
+      <button id="btn-diagnostics" class="btn btn-sm btn-subtle only-advanced" onclick="toggleDiagnosticsDrawer()" title="View radio coordinator and network diagnostics">
+        <span>📊 Diagnostics</span>
+      </button>
+
+      <!-- Permit Join Button -->
+      <button id="permit-join-btn" class="permit-join-btn" onclick="openPermitJoinModal()" title="Open network to pair new devices">
+        <span>+ Add Device (Pair)</span>
+        <span id="permit-join-timer" style="display:none;">(0s)</span>
+      </button>
+
+      <!-- Advanced Mode Switch -->
+      <button id="toggle-advanced-mode" class="mode-toggle-btn" onclick="toggleAdvancedMode()" title="Toggle between Simple and Advanced (Technical) modes">
+        <span class="mode-toggle-icon">⚙️</span>
+        <span id="mode-toggle-label">Advanced Mode</span>
+        <span id="mode-toggle-status" class="mode-badge">OFF</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- DIAGNOSTICS DRAWER (Expandable Coordinator & Architecture Telemetry) -->
+  <div id="drawer-diagnostics" class="diagnostics-drawer" style="display:none;">
+    <div class="drawer-content">
+      <div class="drawer-header">
+        <div>
+          <h3 class="drawer-title">Coordinator & Network Architecture</h3>
+          <p class="drawer-subtitle">Hardware coprocessor telemetry and Zigbee mesh parameters</p>
+        </div>
+        <button class="btn btn-sm" onclick="toggleDiagnosticsDrawer()">✕ Close</button>
+      </div>
+
+      <div class="grid grid-cols-4" style="margin-top: 12px;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Coordinator Adapter</span>
+            <span id="diag-coord-type" class="badge badge-purple">TI Z-Stack</span>
+          </div>
+          <div id="diag-coord-model" class="metric-value" style="font-size: 16px;">CC2652P</div>
+          <div id="diag-coord-ieee" class="metric-sub mono">--:--:--:--:--:--:--:--</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Zigbee Radio</span>
+            <span class="badge badge-info">2.4 GHz</span>
+          </div>
+          <div class="metric-value" style="font-size: 16px;">
+            CH <span id="diag-channel">--</span> | PAN <span id="diag-panid">--</span>
+          </div>
+          <div id="diag-ext-panid" class="metric-sub mono">Ext PAN: --</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Transport Link</span>
+            <span id="diag-transport-badge" class="badge badge-connected">TCP Socket</span>
+          </div>
+          <div id="diag-transport-status" class="metric-value" style="font-size: 16px;">Connected</div>
+          <div class="metric-sub">NVRAM: <strong style="color:var(--accent-green);">Preserved</strong></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Bridge Uptime</span>
+            <span class="badge badge-connected">Operational</span>
+          </div>
+          <div id="diag-uptime" class="metric-value" style="font-size: 16px;">0s</div>
+          <div id="diag-mesh-counts" class="metric-sub">0 Devices · 0 Bindings</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NAVIGATION TABS -->
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="devices" onclick="switchTab('devices')">
+      Devices <span id="nav-device-count" class="tab-count">0</span>
+    </button>
+    <button class="tab-btn" data-tab="bindings" onclick="switchTab('bindings')">
+      Direct Bindings <span id="nav-binding-count" class="tab-count">0</span>
+    </button>
+    <button class="tab-btn" data-tab="ai" onclick="switchTab('ai')">
+      Smart Suggestions <span id="nav-rec-count" class="tab-count">0</span>
+    </button>
+    <button class="tab-btn" data-tab="events" onclick="switchTab('events')">
+      Activity <span id="ws-status-badge" class="tab-count" style="color:var(--accent-green);">● Live</span>
+    </button>
+  </nav>
+
+  <main class="content">
+    <!-- DEVICES TAB (DEFAULT ACTIVE TAB) -->
+    <section id="tab-devices" class="tab-pane active">
+      <div class="actions-bar">
+        <input type="text" id="device-search" class="search-input" placeholder="Search devices by name, model, or room..." oninput="filterDevices()">
+        <button class="btn btn-primary" onclick="loadDevices()">Refresh Devices</button>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>Type</th>
+              <th>Status / Power</th>
+              <th>Battery</th>
+              <th>Signal</th>
+              <th class="col-advanced">IEEE Address</th>
+              <th class="col-advanced">NWK</th>
+              <th class="col-advanced">Endpoints & Clusters</th>
+              <th class="col-advanced">LQI</th>
+              <th class="col-advanced">Last Seen</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="devices-table-body">
+            <tr>
+              <td colspan="11" style="text-align: center; color: var(--text-muted); padding: 32px;">
+                No devices paired yet. Click <strong>+ Add Device (Pair)</strong> above to connect smart switches, lights, or sensors.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- DIRECT BINDINGS TAB -->
+    <section id="tab-bindings" class="tab-pane">
+      <div class="actions-bar">
+        <div>
+          <h2 style="font-size: 16px; font-weight: 600;">Autonomous Device-to-Device Bindings</h2>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-top: 2px;">
+            Direct bindings allow switches and remotes to control smart lights directly with instantaneous response—even if the coordinator, server, or Wi-Fi is powered off.
+          </p>
+        </div>
+        <button class="btn btn-primary" onclick="openCreateBindingModal()">+ Create Device Link</button>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Source Device (Switch/Sensor)</th>
+              <th class="col-advanced">Src EP</th>
+              <th>Control Action / Cluster</th>
+              <th>Target Device (Light/Plug)</th>
+              <th class="col-advanced">Target EP</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="bindings-table-body">
+            <tr>
+              <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                No direct bindings configured. Click <strong>+ Create Device Link</strong> to pair a switch directly to a bulb.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SMART SUGGESTIONS (AI RECOMMENDATIONS) TAB -->
+    <section id="tab-ai" class="tab-pane">
+      <div class="actions-bar">
+        <div>
+          <h2 style="font-size: 16px; font-weight: 600;">Smart Link Suggestions</h2>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-top: 2px;">
+            Analyzes network topology and device types to automatically suggest direct peer-to-peer bindings.
+          </p>
+        </div>
+        <button id="btn-trigger-ai" class="btn btn-primary" onclick="runAIAnalysis()">
+          <span>⚡ Find Suggestions</span>
+        </button>
+      </div>
+
+      <div id="ai-recommendations-list">
+        <div class="card" style="text-align: center; padding: 36px; color: var(--text-muted);">
+          Click <strong>⚡ Find Suggestions</strong> to inspect your devices and propose autonomous direct links.
+        </div>
+      </div>
+    </section>
+
+    <!-- ACTIVITY TAB (FORMERLY LIVE STREAM) -->
+    <section id="tab-events" class="tab-pane">
+      <div class="actions-bar">
+        <div>
+          <h2 style="font-size: 16px; font-weight: 600;">Network Activity</h2>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-top: 2px;">
+            Real-time feed of device interactions, state changes, and network announcements.
+          </p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sm" onclick="clearActivityFeed()">Clear Activity</button>
+        </div>
+      </div>
+
+      <!-- Friendly Activity Timeline (Visible to all users) -->
+      <div id="activity-timeline" class="activity-timeline">
+        <div class="timeline-empty" style="text-align: center; color: var(--text-muted); padding: 36px;">
+          Listening for network activity... Real-time events will appear here.
+        </div>
+      </div>
+
+      <!-- Raw Technical Log Console (Visible in Advanced Mode) -->
+      <div class="only-advanced" style="margin-top: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <h3 style="font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">
+            Raw ZCL & WebSocket Log Stream
+          </h3>
+          <span style="font-size: 12px; color: var(--text-muted);">Filtered for advanced inspection</span>
+        </div>
+        <div id="event-log-console" class="log-console">
+          <!-- Raw logs injected here -->
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- PERMIT JOIN MODAL -->
+  <div id="modal-permit-join" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Pair New Devices (Permit Join)</div>
+        <button class="btn btn-sm" onclick="closeModal('modal-permit-join')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+          Opening the Zigbee network allows new battery switches, sensors, and smart plugs to pair. Put your Zigbee device into pairing mode now.
+        </p>
+        <div class="form-group">
+          <label class="form-label" for="permit-join-duration">Pairing Window Duration</label>
+          <select id="permit-join-duration" class="form-control">
+            <option value="60">1 Minute (60s)</option>
+            <option value="120">2 Minutes (120s)</option>
+            <option value="180">3 Minutes (180s)</option>
+            <option value="254">Maximum (254s)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-danger" onclick="stopPermitJoin()">Stop Pairing (0s)</button>
+        <button class="btn btn-primary" onclick="submitPermitJoin()">Start Pairing</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RENAME DEVICE MODAL -->
+  <div id="modal-rename-device" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Rename Device</div>
+        <button class="btn btn-sm" onclick="closeModal('modal-rename-device')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group col-advanced">
+          <label class="form-label">IEEE Address</label>
+          <input type="text" id="rename-device-ieee" class="form-control mono" disabled>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rename-device-name">Friendly Name</label>
+          <input type="text" id="rename-device-name" class="form-control" placeholder="e.g. Living Room Lamp, Kitchen Motion Sensor">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal('modal-rename-device')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitDeviceRename()">Save Name</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE BINDING MODAL -->
+  <div id="modal-create-binding" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Create Direct Device Link</div>
+        <button class="btn btn-sm" onclick="closeModal('modal-create-binding')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+          Direct binding links a switch or sensor directly to a smart light or plug over the air with zero hub latency.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label" for="bind-src-device">Source Device (Controller/Switch)</label>
+          <select id="bind-src-device" class="form-control" onchange="updateBindingEndpoints('src')"></select>
+        </div>
+
+        <div class="form-group col-advanced">
+          <label class="form-label" for="bind-src-ep">Source Endpoint</label>
+          <select id="bind-src-ep" class="form-control"></select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="bind-target-device">Target Device (Light/Appliance)</label>
+          <select id="bind-target-device" class="form-control" onchange="updateBindingEndpoints('target')"></select>
+        </div>
+
+        <div class="form-group col-advanced">
+          <label class="form-label" for="bind-target-ep">Target Endpoint</label>
+          <select id="bind-target-ep" class="form-control"></select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="bind-cluster">Action / Cluster</label>
+          <select id="bind-cluster" class="form-control">
+            <option value="6">Turn On / Off (Cluster 0x0006)</option>
+            <option value="8">Dimming / Brightness (Cluster 0x0008)</option>
+            <option value="768">Color Control (Cluster 0x0300)</option>
+          </select>
+        </div>
+
+        <div id="bind-optimistic-note" style="display:none; margin-top: 8px; font-size: 12px; color: var(--accent-orange); padding: 8px; border-radius: 6px; background: rgba(245, 158, 11, 0.1);">
+          ⚠️ Optimistic Link: Target device endpoints or clusters are not yet fully discovered. The binding will be registered with a warning.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal('modal-create-binding')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitCreateBinding()">Establish Link</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
