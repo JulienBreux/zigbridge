@@ -157,6 +157,159 @@
       </div>
     </section>
 
+    <!-- DEVICE DETAIL VIEW (Toggled when inspecting a device) -->
+    <section id="view-device-detail" class="tab-pane" style="display:none;">
+      <!-- Breadcrumb and Device Header -->
+      <div class="detail-header-card">
+        <div class="detail-header-top">
+          <button class="btn btn-sm btn-subtle" onclick="navigateToDevices()">
+            ← Back to Devices
+          </button>
+          <div class="detail-header-actions">
+            <button class="btn btn-sm" onclick="renameCurrentDevice()">
+              ✏️ Rename
+            </button>
+          </div>
+        </div>
+
+        <div class="detail-header-main">
+          <div class="detail-device-avatar" id="detail-device-avatar">💡</div>
+          <div class="detail-device-meta">
+            <div class="detail-device-title-row">
+              <h2 id="detail-device-name" class="detail-device-title">Device Name</h2>
+              <span id="detail-device-model-badge" class="badge badge-purple">Model</span>
+              <span id="detail-device-power-badge" class="badge badge-info">Power</span>
+            </div>
+            <div class="detail-device-subtitle">
+              <span class="mono" id="detail-device-ieee">0x0000000000000000</span>
+              <span class="detail-sep">•</span>
+              <span id="detail-device-vendor">Vendor</span>
+              <span class="detail-sep">•</span>
+              <span id="detail-device-lqi">LQI: --</span>
+              <span class="detail-sep">•</span>
+              <span id="detail-device-last-seen">Last Seen: --</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail Sub-Navigation Tabs -->
+        <div class="detail-subtabs">
+          <button id="subtab-btn-exposes" class="detail-subtab-btn active" onclick="switchDetailSubtab('exposes')">
+            🎛️ Exposes &amp; Controls
+          </button>
+          <button id="subtab-btn-about" class="detail-subtab-btn" onclick="switchDetailSubtab('about')">
+            ℹ️ About &amp; Diagnostics
+          </button>
+        </div>
+      </div>
+
+      <!-- SUBTAB: EXPOSES & CONTROLS -->
+      <div id="subtab-exposes" class="subtab-pane active">
+        <div id="detail-exposes-container" class="exposes-container">
+          <!-- Dynamically populated expose controls -->
+        </div>
+      </div>
+
+      <!-- SUBTAB: ABOUT & DIAGNOSTICS -->
+      <div id="subtab-about" class="subtab-pane" style="display:none;">
+        <div class="grid grid-cols-2" style="gap: 16px;">
+          <!-- Hardware Identity -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Hardware Identity</span>
+              <span id="about-device-type" class="badge badge-info">Device</span>
+            </div>
+            <div class="about-field-list">
+              <div class="about-field-item">
+                <span class="about-field-label">Friendly Name</span>
+                <span id="about-friendly-name" class="about-field-value">--</span>
+              </div>
+              <div class="about-field-item">
+                <span class="about-field-label">Model Identifier</span>
+                <span id="about-model" class="about-field-value mono">--</span>
+              </div>
+              <div class="about-field-item">
+                <span class="about-field-label">Vendor / Manufacturer</span>
+                <span id="about-vendor" class="about-field-value">--</span>
+              </div>
+              <div class="about-field-item">
+                <span class="about-field-label">Description</span>
+                <span id="about-description" class="about-field-value">--</span>
+              </div>
+              <div class="about-field-item">
+                <span class="about-field-label">Supported Zigbee Models</span>
+                <span id="about-zigbee-models" class="about-field-value mono">--</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Zigbee Mesh Telemetry -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Zigbee Mesh Telemetry</span>
+              <span id="about-mesh-status" class="badge badge-connected">Operational</span>
+            </div>
+            <div class="about-field-list">
+              <div class="about-field-item">
+                <span class="about-field-label">IEEE Address (EUI-64)</span>
+                <span id="about-ieee" class="about-field-value mono">--</span>
+              </div>
+              <div class="about-field-item">
+                <span class="about-field-label">16-bit Network Address (NWK)</span>
+                <span id="about-nwk" class="about-field-value mono">--</span>
+              </div>
+              <div class="about-field-item">
+                <span class="about-field-label">Signal Quality (LQI)</span>
+                <div class="about-field-value" style="display: flex; align-items: center; gap: 8px;">
+                  <span id="about-lqi-text">--</span>
+                  <div class="lqi-bar-container" style="width: 100px; height: 6px;">
+                    <div id="about-lqi-bar" class="lqi-bar" style="width: 0%;"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="about-field-item">
+                <span class="about-field-label">Last Seen</span>
+                <span id="about-last-seen" class="about-field-value">--</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Power Configuration -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Power Configuration</span>
+              <span id="about-power-source-badge" class="badge">Mains</span>
+            </div>
+            <div class="about-field-list">
+              <div class="about-field-item">
+                <span class="about-field-label">Power Source</span>
+                <span id="about-power-source" class="about-field-value">--</span>
+              </div>
+              <div class="about-field-item">
+                <span class="about-field-label">Battery Level</span>
+                <span id="about-battery" class="about-field-value">--</span>
+              </div>
+              <div class="about-field-item">
+                <span class="about-field-label">Battery Voltage</span>
+                <span id="about-voltage" class="about-field-value">--</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Endpoints & Clusters -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Endpoints &amp; Clusters</span>
+              <span id="about-ep-count" class="badge badge-purple">1 Endpoint</span>
+            </div>
+            <div id="about-endpoints-list" class="endpoints-cluster-tree">
+              <!-- Dynamically populated endpoint/cluster badges -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- DIRECT BINDINGS TAB -->
     <section id="tab-bindings" class="tab-pane">
       <div class="actions-bar">

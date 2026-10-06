@@ -76,11 +76,22 @@ function toggleDiagnosticsDrawer() {
 // ==============================================================================
 
 function switchTab(tabId) {
+  const detailView = document.getElementById('view-device-detail');
+  if (detailView) {
+    detailView.style.display = 'none';
+    detailView.classList.remove('active');
+  }
+  if (window.location.hash.startsWith('#/devices/')) {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tabId);
   });
   document.querySelectorAll('.tab-pane').forEach(pane => {
-    pane.classList.toggle('active', pane.id === `tab-${tabId}`);
+    if (pane.id !== 'view-device-detail') {
+      pane.classList.toggle('active', pane.id === `tab-${tabId}`);
+    }
   });
 
   if (tabId === 'devices') loadDevices();
@@ -356,7 +367,7 @@ function renderDevicesTable(devices) {
     const lqiPercent = Math.min(100, Math.round((dev.lqi / 255) * 100));
 
     return `
-      <tr>
+      <tr class="clickable-row" onclick="navigateToDevice('${escapeHtml(dev.ieee)}')">
         <!-- Device Friendly Name & Icon -->
         <td>
           <div class="device-row-main">
@@ -409,7 +420,7 @@ function renderDevicesTable(devices) {
 
         <!-- Actions -->
         <td>
-          <button class="btn btn-sm" onclick="openRenameModal('${escapeHtml(dev.ieee)}', '${escapeHtml(dev.friendly_name || '')}')">
+          <button class="btn btn-sm" onclick="event.stopPropagation(); openRenameModal('${escapeHtml(dev.ieee)}', '${escapeHtml(dev.friendly_name || '')}')">
             Rename
           </button>
         </td>
@@ -449,8 +460,757 @@ async function submitDeviceRename() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     closeModal('modal-rename-device');
     loadDevices();
+    if (currentDetailDevice && currentDetailDevice.ieee === ieee) {
+      currentDetailDevice.friendly_name = name;
+      updateDetailHeader(currentDetailDevice, currentDetailDefinition);
+      const aboutName = document.getElementById('about-friendly-name');
+      if (aboutName) aboutName.textContent = name || ieee;
+    }
   } catch (err) {
     alert(`Failed to rename device: ${err.message}`);
+  }
+}
+
+// ==============================================================================
+// Device Detail View & Interactive Exposes Control
+// ==============================================================================
+
+let currentDetailDevice = null;
+let currentDetailDefinition = null;
+let currentDetailSubtab = 'exposes';
+
+function navigateToDevice(ieee) {
+  window.location.hash = '#/devices/' + encodeURIComponent(ieee);
+}
+
+function navigateToDevices() {
+  window.location.hash = '';
+  const detailView = document.getElementById('view-device-detail');
+  if (detailView) {
+    detailView.style.display = 'none';
+    detailView.classList.remove('active');
+  }
+  switchTab('devices');
+}
+
+function handleRoute() {
+  const hash = window.location.hash || '';
+  if (hash.startsWith('#/devices/')) {
+    const ieee = decodeURIComponent(hash.substring('#/devices/'.length));
+    if (ieee) {
+      openDeviceDetail(ieee);
+      return;
+    }
+  }
+
+  const detailView = document.getElementById('view-device-detail');
+  if (detailView && detailView.style.display !== 'none') {
+    detailView.style.display = 'none';
+    detailView.classList.remove('active');
+    const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab || 'devices';
+    const activePane = document.getElementById(`tab-${activeTab}`);
+    if (activePane) {
+      activePane.style.display = 'block';
+      activePane.classList.add('active');
+    }
+  }
+}
+
+function switchDetailSubtab(subtab) {
+  currentDetailSubtab = subtab;
+  const exposesBtn = document.getElementById('subtab-btn-exposes');
+  const aboutBtn = document.getElementById('subtab-btn-about');
+  const exposesPane = document.getElementById('subtab-exposes');
+  const aboutPane = document.getElementById('subtab-about');
+
+  if (subtab === 'about') {
+    if (exposesBtn) exposesBtn.classList.remove('active');
+    if (aboutBtn) aboutBtn.classList.add('active');
+    if (exposesPane) exposesPane.style.display = 'none';
+    if (aboutPane) aboutPane.style.display = 'block';
+  } else {
+    if (exposesBtn) exposesBtn.classList.add('active');
+    if (aboutBtn) aboutBtn.classList.remove('active');
+    if (exposesPane) exposesPane.style.display = 'block';
+    if (aboutPane) aboutPane.style.display = 'none';
+  }
+}
+
+function renameCurrentDevice() {
+  if (!currentDetailDevice) return;
+  openRenameModal(currentDetailDevice.ieee, currentDetailDevice.friendly_name || '');
+}
+
+async function openDeviceDetail(ieee) {
+  // Hide all main tab panes
+  document.querySelectorAll('.tab-pane').forEach(pane => {
+    pane.classList.remove('active');
+    if (pane.id !== 'view-device-detail') {
+      pane.style.display = 'none';
+    }
+  });
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+
+  const detailView = document.getElementById('view-device-detail');
+  if (detailView) {
+    detailView.style.display = 'block';
+    detailView.classList.add('active');
+  }
+
+  // Restore subtab view
+  switchDetailSubtab(currentDetailSubtab || 'exposes');
+
+  try {
+    const res = await fetch(`/api/devices/${encodeURIComponent(ieee)}`);
+    if (!res.ok) {
+      if (res.status === 404) {
+        alert(`Device ${ieee} not found.`);
+        navigateToDevices();
+        return;
+      }
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    currentDetailDevice = data.device;
+    currentDetailDefinition = data.definition || null;
+
+    updateDetailHeader(currentDetailDevice, currentDetailDefinition);
+    renderAboutTab(currentDetailDevice, currentDetailDefinition);
+    renderExposesTab(currentDetailDevice, currentDetailDefinition);
+  } catch (err) {
+    console.error('Failed to load device detail:', err);
+    alert(`Failed to load device: ${err.message}`);
+    navigateToDevices();
+  }
+}
+
+function updateDetailHeader(dev, def) {
+  if (!dev) return;
+  const typeInfo = inferDeviceType(dev);
+
+  const avatar = document.getElementById('detail-device-avatar');
+  if (avatar) avatar.textContent = typeInfo.icon;
+
+  const nameEl = document.getElementById('detail-device-name');
+  if (nameEl) nameEl.textContent = dev.friendly_name || dev.ieee;
+
+  const modelBadge = document.getElementById('detail-device-model-badge');
+  if (modelBadge) modelBadge.textContent = dev.model || def?.device?.model || 'Generic Device';
+
+  const powerBadge = document.getElementById('detail-device-power-badge');
+  if (powerBadge) {
+    if (dev.battery !== undefined && dev.battery !== null) {
+      powerBadge.textContent = `🔋 ${dev.battery}%`;
+      powerBadge.className = 'badge badge-info';
+    } else {
+      powerBadge.textContent = '⚡ Mains';
+      powerBadge.className = 'badge badge-connected';
+    }
+  }
+
+  const ieeeEl = document.getElementById('detail-device-ieee');
+  if (ieeeEl) ieeeEl.textContent = dev.ieee;
+
+  const vendorEl = document.getElementById('detail-device-vendor');
+  if (vendorEl) vendorEl.textContent = dev.manufacturer || def?.device?.vendor || 'Zigbee Device';
+
+  const lqiEl = document.getElementById('detail-device-lqi');
+  if (lqiEl) lqiEl.textContent = `LQI: ${dev.lqi || 0} / 255`;
+
+  const lastSeenEl = document.getElementById('detail-device-last-seen');
+  if (lastSeenEl) {
+    lastSeenEl.textContent = `Last Seen: ${dev.last_seen ? new Date(dev.last_seen).toLocaleTimeString() : 'Never'}`;
+  }
+}
+
+function renderAboutTab(dev, def) {
+  if (!dev) return;
+  const typeInfo = inferDeviceType(dev);
+  const isBattery = dev.battery !== undefined && dev.battery !== null;
+
+  // Hardware Identity
+  const typeEl = document.getElementById('about-device-type');
+  if (typeEl) typeEl.textContent = typeInfo.name;
+
+  const friendlyNameEl = document.getElementById('about-friendly-name');
+  if (friendlyNameEl) friendlyNameEl.textContent = dev.friendly_name || dev.ieee;
+
+  const modelEl = document.getElementById('about-model');
+  if (modelEl) modelEl.textContent = dev.model || def?.device?.model || '--';
+
+  const vendorEl = document.getElementById('about-vendor');
+  if (vendorEl) vendorEl.textContent = dev.manufacturer || def?.device?.vendor || '--';
+
+  const descEl = document.getElementById('about-description');
+  if (descEl) descEl.textContent = def?.device?.description || `${typeInfo.name} connected to Zigbee mesh`;
+
+  const zmEl = document.getElementById('about-zigbee-models');
+  if (zmEl) {
+    if (def?.device?.zigbee_models && def.device.zigbee_models.length > 0) {
+      zmEl.textContent = def.device.zigbee_models.join(', ');
+    } else {
+      zmEl.textContent = dev.model || '--';
+    }
+  }
+
+  // Zigbee Mesh Telemetry
+  const meshStatusEl = document.getElementById('about-mesh-status');
+  if (meshStatusEl) {
+    meshStatusEl.className = 'badge badge-connected';
+    meshStatusEl.textContent = 'Operational';
+  }
+
+  const ieeeEl = document.getElementById('about-ieee');
+  if (ieeeEl) ieeeEl.textContent = dev.ieee;
+
+  const nwkEl = document.getElementById('about-nwk');
+  if (nwkEl) nwkEl.textContent = `0x${(dev.nwk || 0).toString(16).toUpperCase().padStart(4, '0')}`;
+
+  const lqi = dev.lqi || 0;
+  const lqiPercent = Math.min(100, Math.round((lqi / 255) * 100));
+  const lqiTextEl = document.getElementById('about-lqi-text');
+  if (lqiTextEl) lqiTextEl.textContent = `${lqi} / 255 (${lqiPercent}%)`;
+
+  const lqiBarEl = document.getElementById('about-lqi-bar');
+  if (lqiBarEl) lqiBarEl.style.width = `${lqiPercent}%`;
+
+  const lastSeenEl = document.getElementById('about-last-seen');
+  if (lastSeenEl) {
+    lastSeenEl.textContent = dev.last_seen ? new Date(dev.last_seen).toLocaleString() : 'Never';
+  }
+
+  // Power Configuration
+  const powerBadgeEl = document.getElementById('about-power-source-badge');
+  if (powerBadgeEl) {
+    powerBadgeEl.className = isBattery ? 'badge badge-info' : 'badge badge-connected';
+    powerBadgeEl.textContent = isBattery ? 'Battery-Powered' : 'Mains';
+  }
+
+  const powerSourceEl = document.getElementById('about-power-source');
+  if (powerSourceEl) powerSourceEl.textContent = dev.power_source || (isBattery ? 'Battery' : 'Mains (AC)');
+
+  const batteryEl = document.getElementById('about-battery');
+  if (batteryEl) batteryEl.textContent = isBattery ? `${dev.battery}%` : 'N/A (Mains-powered)';
+
+  const voltEl = document.getElementById('about-voltage');
+  if (voltEl) {
+    if (dev.voltage) {
+      voltEl.textContent = `${(dev.voltage / 1000).toFixed(2)} V (${dev.voltage} mV)`;
+    } else if (dev.state && dev.state.voltage !== undefined) {
+      voltEl.textContent = `${dev.state.voltage} V`;
+    } else {
+      voltEl.textContent = 'N/A';
+    }
+  }
+
+  // Endpoints & Clusters
+  const epCountEl = document.getElementById('about-ep-count');
+  const epContainer = document.getElementById('about-endpoints-list');
+  const endpoints = def?.device?.endpoints || (dev.endpoints ? dev.endpoints.map(ep => ({
+    endpoint: ep,
+    input_clusters: dev.input_clusters || [],
+    output_clusters: dev.output_clusters || []
+  })) : []);
+
+  if (epCountEl) {
+    epCountEl.textContent = `${endpoints.length} Endpoint${endpoints.length !== 1 ? 's' : ''}`;
+  }
+
+  if (epContainer) {
+    if (endpoints.length === 0) {
+      epContainer.innerHTML = `<div style="color:var(--text-muted); font-size:12px; padding:8px 0;">No endpoints registered.</div>`;
+    } else {
+      epContainer.innerHTML = endpoints.map(ep => {
+        const inClusters = (ep.input_clusters || []).map(c => `<span class="tag-cluster" title="Server">${clusterName(c)}</span>`).join(' ') || '<span style="color:var(--text-muted); font-size:11px;">None</span>';
+        const outClusters = (ep.output_clusters || []).map(c => `<span class="tag-cluster" style="color:var(--accent-blue);" title="Client">${clusterName(c)}</span>`).join(' ') || '<span style="color:var(--text-muted); font-size:11px;">None</span>';
+        return `
+          <div class="ep-card">
+            <div class="ep-header">Endpoint ${ep.endpoint}</div>
+            <div class="ep-clusters-group">
+              <div class="ep-clusters-label">Input / Server Clusters</div>
+              <div>${inClusters}</div>
+            </div>
+            <div class="ep-clusters-group" style="margin-top: 8px;">
+              <div class="ep-clusters-label">Output / Client Clusters</div>
+              <div>${outClusters}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+}
+
+function getExposeIcon(prop, type) {
+  const p = (prop || '').toLowerCase();
+  if (p === 'state') return '⭐';
+  if (p.includes('power_outage')) return '💾';
+  if (p.includes('indicator')) return '🔆';
+  if (p.includes('lock')) return '🔒';
+  if (p.includes('countdown') || p.includes('timer')) return '⏱️';
+  if (p.includes('voltage')) return '⚡';
+  if (p.includes('current')) return '⚡';
+  if (p.includes('power') || p.includes('watt')) return '⚡';
+  if (p.includes('energy') || p.includes('kwh')) return '🌱';
+  if (p.includes('temp')) return '🌡️';
+  if (p.includes('hum')) return '💧';
+  if (p.includes('occupancy') || p.includes('motion')) return '🚶';
+  if (p.includes('contact') || p.includes('door') || p.includes('window')) return '🚪';
+  if (p.includes('water') || p.includes('leak')) return '💧';
+  if (p.includes('smoke')) return '🔥';
+  if (p.includes('linkquality') || p.includes('lqi')) return '📶';
+  if (p.includes('battery')) return '🔋';
+  if (p.includes('identify')) return '✋';
+  if (type === 'binary') return '💡';
+  if (type === 'action') return '▶️';
+  return '⚙️';
+}
+
+function getDeviceExposes(dev, def) {
+  let exposes = [];
+  if (def && def.device && Array.isArray(def.device.exposes) && def.device.exposes.length > 0) {
+    exposes = [...def.device.exposes];
+  } else {
+    // Fallback cluster heuristics
+    const inClusters = dev.input_clusters || [];
+    const outClusters = dev.output_clusters || [];
+
+    if (inClusters.includes(6) || outClusters.includes(6)) {
+      exposes.push({
+        type: 'binary',
+        name: 'State',
+        property: 'state',
+        description: 'On/off state of the switch',
+        values: ['OFF', 'ON'],
+        access: 3
+      });
+    }
+    if (inClusters.includes(8)) {
+      exposes.push({
+        type: 'numeric',
+        name: 'Brightness',
+        property: 'brightness',
+        description: 'Brightness level of the light',
+        min: 0,
+        max: 254,
+        unit: '',
+        access: 3
+      });
+    }
+    if (inClusters.includes(1026)) {
+      exposes.push({
+        type: 'numeric',
+        name: 'Temperature',
+        property: 'temperature',
+        description: 'Measured temperature',
+        unit: '°C',
+        access: 1
+      });
+    }
+    if (inClusters.includes(1029)) {
+      exposes.push({
+        type: 'numeric',
+        name: 'Humidity',
+        property: 'humidity',
+        description: 'Measured relative humidity',
+        unit: '%',
+        access: 1
+      });
+    }
+    if (inClusters.includes(1030)) {
+      exposes.push({
+        type: 'binary',
+        name: 'Occupancy',
+        property: 'occupancy',
+        description: 'Indicates whether the device detected occupancy',
+        values: ['CLEAR', 'OCCUPIED'],
+        access: 1
+      });
+    }
+    if (inClusters.includes(2820)) {
+      exposes.push({
+        type: 'numeric',
+        name: 'Power',
+        property: 'power',
+        description: 'Instantaneous electrical power',
+        unit: 'W',
+        access: 1
+      });
+      exposes.push({
+        type: 'numeric',
+        name: 'Voltage',
+        property: 'voltage',
+        description: 'Measured electrical potential value',
+        unit: 'V',
+        access: 1
+      });
+      exposes.push({
+        type: 'numeric',
+        name: 'Current',
+        property: 'current',
+        description: 'Instantaneous measured electrical current',
+        unit: 'A',
+        access: 1
+      });
+    }
+  }
+
+  // If definition has simulation actions (like identify, etc.) that aren't exposes yet, add them
+  if (def && def.device && def.device.simulations && def.device.simulations.actions) {
+    const existingProps = new Set(exposes.map(e => e.property));
+    for (const act of Object.keys(def.device.simulations.actions)) {
+      if (!existingProps.has(act)) {
+        exposes.push({
+          type: 'action',
+          name: act.charAt(0).toUpperCase() + act.slice(1),
+          property: act,
+          description: `Trigger ${act} action`,
+          access: 2
+        });
+      }
+    }
+  }
+
+  // Ensure linkquality is included if not already present
+  if (!exposes.some(e => e.property === 'linkquality')) {
+    exposes.push({
+      type: 'numeric',
+      name: 'Linkquality',
+      property: 'linkquality',
+      description: 'Link quality (signal strength)',
+      unit: 'lqi',
+      min: 0,
+      max: 255,
+      access: 1
+    });
+  }
+
+  return exposes;
+}
+
+function renderExposesTab(dev, def) {
+  const container = document.getElementById('detail-exposes-container');
+  if (!container) return;
+
+  const exposes = getDeviceExposes(dev, def);
+  if (exposes.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding:32px; color:var(--text-muted);">No controllable exposes or sensor metrics available for this device.</div>`;
+    return;
+  }
+
+  container.innerHTML = exposes.map(exp => renderExposeRow(dev, exp)).join('');
+}
+
+function renderExposeRow(dev, exp) {
+  const prop = exp.property;
+  const name = exp.name || prop;
+  const desc = exp.description || '';
+  const icon = getExposeIcon(prop, exp.type);
+
+  // Determine current value
+  let val = (dev.state && dev.state[prop] !== undefined) ? dev.state[prop] : undefined;
+  if (val === undefined) {
+    if (prop === 'linkquality') val = dev.lqi;
+    else if (prop === 'battery') val = dev.battery;
+    else if (prop === 'voltage' && dev.voltage) val = Number((dev.voltage / 1000).toFixed(1));
+  }
+
+  let controlHtml = '';
+
+  switch (exp.type) {
+    case 'binary': {
+      const values = (exp.values && exp.values.length >= 2) ? exp.values : ['OFF', 'ON'];
+      const offVal = values[0];
+      const onVal = values[1];
+
+      let isChecked = false;
+      if (typeof val === 'boolean') {
+        isChecked = val;
+      } else if (val !== undefined && val !== null) {
+        isChecked = String(val).toUpperCase() === String(onVal).toUpperCase();
+      }
+
+      controlHtml = `
+        <div class="expose-binary-toggle">
+          <span class="toggle-label ${!isChecked ? 'active' : ''}">${escapeHtml(String(offVal))}</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-${escapeHtml(prop)}" ${isChecked ? 'checked' : ''}
+              onchange="onBinaryToggleChange('${escapeHtml(dev.ieee)}', '${escapeHtml(prop)}', this.checked, '${escapeHtml(String(offVal))}', '${escapeHtml(String(onVal))}')">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label ${isChecked ? 'active' : ''}">${escapeHtml(String(onVal))}</span>
+        </div>
+      `;
+      break;
+    }
+
+    case 'enum': {
+      const values = exp.values || [];
+      const currentStr = val !== undefined && val !== null ? String(val).toLowerCase() : '';
+      const chips = values.map(v => {
+        const isAct = currentStr === String(v).toLowerCase();
+        return `<button type="button" class="chip-btn ${isAct ? 'active' : ''}" onclick="onEnumChipClick('${escapeHtml(dev.ieee)}', '${escapeHtml(prop)}', '${escapeHtml(v)}')">${escapeHtml(v)}</button>`;
+      }).join('');
+      controlHtml = `<div class="expose-chip-group">${chips}</div>`;
+      break;
+    }
+
+    case 'numeric': {
+      const isSettable = (exp.access & 2) !== 0 && exp.min !== undefined && exp.max !== undefined;
+      const unit = exp.unit || '';
+
+      if (isSettable) {
+        const min = exp.min ?? 0;
+        const max = exp.max ?? 100;
+        const numVal = (typeof val === 'number') ? val : (min ?? 0);
+        controlHtml = `
+          <div class="expose-numeric-slider">
+            <div class="slider-track-wrap">
+              <input type="range" class="range-input" id="slider-${escapeHtml(prop)}" min="${min}" max="${max}" value="${numVal}"
+                oninput="onSliderTrackInput('${escapeHtml(prop)}', this.value)"
+                onchange="setDeviceProperty('${escapeHtml(dev.ieee)}', '${escapeHtml(prop)}', Number(this.value))">
+              <div class="range-bounds">
+                <span>${min}</span>
+                <span>${max}</span>
+              </div>
+            </div>
+            <div class="unit-input-box">
+              <input type="number" id="input-${escapeHtml(prop)}" min="${min}" max="${max}" value="${numVal}"
+                oninput="onSliderBoxInput('${escapeHtml(prop)}', this.value)"
+                onchange="setDeviceProperty('${escapeHtml(dev.ieee)}', '${escapeHtml(prop)}', Number(this.value))">
+              <span class="unit-label">${escapeHtml(unit)}</span>
+            </div>
+          </div>
+        `;
+      } else {
+        const displayVal = (val !== undefined && val !== null) ? val : '--';
+        controlHtml = `
+          <div class="expose-metric-readout">
+            <span class="metric-readout-val" id="metric-${escapeHtml(prop)}">${displayVal}</span>
+            <span class="metric-readout-unit">${escapeHtml(unit)}</span>
+          </div>
+        `;
+      }
+      break;
+    }
+
+    case 'action': {
+      controlHtml = `
+        <button type="button" class="expose-action-btn" id="btn-action-${escapeHtml(prop)}"
+          onclick="triggerDeviceAction('${escapeHtml(dev.ieee)}', '${escapeHtml(prop)}')">
+          ${escapeHtml(prop)}
+        </button>
+      `;
+      break;
+    }
+
+    default: {
+      const displayVal = (val !== undefined && val !== null) ? (typeof val === 'object' ? JSON.stringify(val) : val) : '--';
+      controlHtml = `
+        <div class="expose-metric-readout">
+          <span class="metric-readout-val" id="metric-${escapeHtml(prop)}">${escapeHtml(String(displayVal))}</span>
+          <span class="metric-readout-unit">${escapeHtml(exp.unit || '')}</span>
+        </div>
+      `;
+      break;
+    }
+  }
+
+  return `
+    <div class="expose-row" data-property="${escapeHtml(prop)}">
+      <div class="expose-info">
+        <div class="expose-icon">${icon}</div>
+        <div class="expose-meta">
+          <div class="expose-title-group">
+            <span class="expose-title">${escapeHtml(name)}</span>
+            <span class="expose-tooltip">${escapeHtml(prop)}</span>
+          </div>
+          <div class="expose-desc">${escapeHtml(desc)}</div>
+        </div>
+      </div>
+      <div class="expose-control">${controlHtml}</div>
+    </div>
+  `;
+}
+
+function onBinaryToggleChange(ieee, prop, isChecked, offVal, onVal) {
+  const row = document.querySelector(`.expose-row[data-property="${prop}"]`);
+  if (row) {
+    const labels = row.querySelectorAll('.toggle-label');
+    if (labels.length === 2) {
+      labels[0].classList.toggle('active', !isChecked);
+      labels[1].classList.toggle('active', isChecked);
+    }
+  }
+  const chosenVal = isChecked ? onVal : offVal;
+  let finalVal = chosenVal;
+  if (chosenVal === 'true') finalVal = true;
+  else if (chosenVal === 'false') finalVal = false;
+  setDeviceProperty(ieee, prop, finalVal);
+}
+
+function onEnumChipClick(ieee, prop, chosenVal) {
+  const row = document.querySelector(`.expose-row[data-property="${prop}"]`);
+  if (row) {
+    row.querySelectorAll('.chip-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.textContent.trim().toLowerCase() === chosenVal.toLowerCase());
+    });
+  }
+  setDeviceProperty(ieee, prop, chosenVal);
+}
+
+function onSliderTrackInput(prop, val) {
+  const box = document.getElementById(`input-${prop}`);
+  if (box) box.value = val;
+}
+
+function onSliderBoxInput(prop, val) {
+  const slider = document.getElementById(`slider-${prop}`);
+  if (slider) slider.value = val;
+}
+
+async function setDeviceProperty(ieee, prop, val) {
+  if (currentDetailDevice && currentDetailDevice.ieee === ieee) {
+    if (!currentDetailDevice.state) currentDetailDevice.state = {};
+    currentDetailDevice.state[prop] = val;
+  }
+
+  try {
+    const res = await fetch(`/api/devices/${encodeURIComponent(ieee)}/set`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [prop]: val })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+  } catch (err) {
+    alert(`Failed to set ${prop}: ${err.message}`);
+    if (currentDetailDevice && currentDetailDevice.ieee === ieee) {
+      openDeviceDetail(ieee);
+    }
+  }
+}
+
+async function triggerDeviceAction(ieee, action) {
+  const btn = document.getElementById(`btn-action-${action}`);
+  const originalText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Sending...';
+  }
+
+  try {
+    const res = await fetch(`/api/devices/${encodeURIComponent(ieee)}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    if (btn) {
+      btn.textContent = '✓ Sent';
+      setTimeout(() => {
+        if (btn) {
+          btn.textContent = originalText;
+          btn.disabled = false;
+        }
+      }, 1000);
+    }
+  } catch (err) {
+    alert(`Failed to trigger ${action}: ${err.message}`);
+    if (btn) {
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
+  }
+}
+
+function updateDetailLive(dev, changedState) {
+  if (!dev) return;
+
+  // Header LQI & Last Seen
+  const lqiEl = document.getElementById('detail-device-lqi');
+  if (lqiEl) lqiEl.textContent = `LQI: ${dev.lqi || 0} / 255`;
+
+  const lastSeenEl = document.getElementById('detail-device-last-seen');
+  if (lastSeenEl) lastSeenEl.textContent = 'Last Seen: Just now';
+
+  // About Tab LQI & Last Seen
+  const aboutLqiText = document.getElementById('about-lqi-text');
+  if (aboutLqiText) {
+    const lqi = dev.lqi || 0;
+    const lqiPercent = Math.min(100, Math.round((lqi / 255) * 100));
+    aboutLqiText.textContent = `${lqi} / 255 (${lqiPercent}%)`;
+    const aboutLqiBar = document.getElementById('about-lqi-bar');
+    if (aboutLqiBar) aboutLqiBar.style.width = `${lqiPercent}%`;
+  }
+  const aboutLastSeen = document.getElementById('about-last-seen');
+  if (aboutLastSeen) aboutLastSeen.textContent = 'Just now';
+
+  if (!changedState) return;
+
+  // Update specific expose controls
+  for (const [key, val] of Object.entries(changedState)) {
+    // 1. Metric readout
+    const metricEl = document.getElementById(`metric-${key}`);
+    if (metricEl) {
+      metricEl.textContent = (val !== null && val !== undefined) ? val : '--';
+    }
+
+    // 2. Numeric slider & box
+    const sliderEl = document.getElementById(`slider-${key}`);
+    const boxEl = document.getElementById(`input-${key}`);
+    if (sliderEl && typeof val === 'number') {
+      sliderEl.value = val;
+    }
+    if (boxEl && typeof val === 'number') {
+      boxEl.value = val;
+    }
+
+    // 3. Binary toggle
+    const toggleEl = document.getElementById(`toggle-${key}`);
+    if (toggleEl) {
+      const isChecked = (typeof val === 'boolean') ? val : (String(val).toUpperCase() === 'ON' || String(val).toUpperCase() === 'LOCK');
+      toggleEl.checked = isChecked;
+      const row = document.querySelector(`.expose-row[data-property="${key}"]`);
+      if (row) {
+        const labels = row.querySelectorAll('.toggle-label');
+        if (labels.length === 2) {
+          labels[0].classList.toggle('active', !isChecked);
+          labels[1].classList.toggle('active', isChecked);
+        }
+      }
+    }
+
+    // 4. Enum chips
+    const enumRow = document.querySelector(`.expose-row[data-property="${key}"]`);
+    if (enumRow) {
+      const valStr = String(val).toLowerCase();
+      enumRow.querySelectorAll('.chip-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.trim().toLowerCase() === valStr);
+      });
+    }
+
+    // 5. Battery & voltage updates in About & Header
+    if (key === 'battery') {
+      dev.battery = val;
+      const powerBadge = document.getElementById('detail-device-power-badge');
+      if (powerBadge) {
+        powerBadge.textContent = `🔋 ${val}%`;
+        powerBadge.className = 'badge badge-info';
+      }
+      const aboutBattery = document.getElementById('about-battery');
+      if (aboutBattery) aboutBattery.textContent = `${val}%`;
+    }
+    if (key === 'voltage') {
+      const aboutVolt = document.getElementById('about-voltage');
+      if (aboutVolt) aboutVolt.textContent = `${val} V`;
+    }
   }
 }
 
@@ -768,9 +1528,14 @@ function handleLiveEvent(evt) {
     if (typeof payload.remaining === 'number') {
       updatePermitJoinDisplay(payload.remaining);
     }
-  } else if (eventType === 'device_join' || eventType === 'device_state_change') {
+  } else if (eventType === 'device_join' || eventType === 'device_state_change' || eventType === 'device_state') {
     loadDevices();
     loadStatus();
+    if (currentDetailDevice && payload && payload.ieee === currentDetailDevice.ieee) {
+      if (payload.state) {
+        updateDetailLive(currentDetailDevice, payload.state);
+      }
+    }
   } else if (eventType === 'binding_change') {
     loadBindings();
     loadStatus();
@@ -783,7 +1548,7 @@ function dispatchFriendlyActivity(type, payload) {
   if (type === 'device_join') {
     const devName = payload.friendly_name || payload.ieee || 'New Device';
     appendActivityItem('join', '✨ New Device Paired', `${devName} joined the Zigbee mesh network.`, 'join');
-  } else if (type === 'device_state_change') {
+  } else if (type === 'device_state_change' || type === 'device_state') {
     const devName = getDeviceName(payload.ieee);
     let stateDesc = 'Reported attribute update.';
     if (payload.state && typeof payload.state.state === 'string') {
@@ -1189,8 +1954,14 @@ window.addEventListener('DOMContentLoaded', () => {
   // 1. Initialize user mode (Simple vs Advanced) from localStorage
   initMode();
 
-  // 2. Default landing tab is Devices
-  switchTab('devices');
+  // 2. Hash routing listener & initial route handling
+  window.addEventListener('hashchange', handleRoute);
+  if (window.location.hash.startsWith('#/devices/')) {
+    handleRoute();
+  } else {
+    // Default landing tab is Devices
+    switchTab('devices');
+  }
 
   // 3. Load initial network state
   loadStatus();
