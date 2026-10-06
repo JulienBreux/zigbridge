@@ -6,19 +6,21 @@ import (
 	"time"
 
 	"github.com/julienbreux/zigbridge/internal/adapter"
+	"github.com/julienbreux/zigbridge/internal/fixture"
 	"github.com/julienbreux/zigbridge/internal/transport"
 	"github.com/julienbreux/zigbridge/internal/zcl"
 )
 
 // MockAdapter simulates an adapter with mock devices and simulated events.
 type MockAdapter struct {
-	mu           sync.RWMutex
-	info         adapter.AdapterInfo
-	frameHandler adapter.FrameHandler
-	joinHandler  adapter.DeviceJoinHandler
-	bindings     []adapter.BindRequest
-	running      bool
-	permitJoin   uint8
+	mu             sync.RWMutex
+	info           adapter.AdapterInfo
+	frameHandler   adapter.FrameHandler
+	joinHandler    adapter.DeviceJoinHandler
+	bindings       []adapter.BindRequest
+	running        bool
+	permitJoin     uint8
+	virtualDevices map[string]*fixture.VirtualDevice
 }
 
 // New creates a new MockAdapter.
@@ -33,7 +35,8 @@ func New(channel uint8, panID uint16) *MockAdapter {
 			IEEE:     "0x00124B0014D8B954",
 			Status:   "ready",
 		},
-		bindings: make([]adapter.BindRequest, 0),
+		bindings:       make([]adapter.BindRequest, 0),
+		virtualDevices: make(map[string]*fixture.VirtualDevice),
 	}
 }
 
@@ -156,3 +159,37 @@ func (m *MockAdapter) GetBindings() []adapter.BindRequest {
 	copy(cp, m.bindings)
 	return cp
 }
+
+// SpawnVirtualDevice creates and registers a simulated device, triggering join and identity announcement.
+func (m *MockAdapter) SpawnVirtualDevice(def *fixture.DeviceDefinition, ieee string, nwk uint16) (*fixture.VirtualDevice, error) {
+	vdev, err := fixture.Spawn(def, ieee, nwk, m)
+	if err != nil {
+		return nil, err
+	}
+
+	m.mu.Lock()
+	m.virtualDevices[ieee] = vdev
+	m.mu.Unlock()
+
+	return vdev, nil
+}
+
+// GetVirtualDevices returns all currently active virtual devices.
+func (m *MockAdapter) GetVirtualDevices() []*fixture.VirtualDevice {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	res := make([]*fixture.VirtualDevice, 0, len(m.virtualDevices))
+	for _, v := range m.virtualDevices {
+		res = append(res, v)
+	}
+	return res
+}
+
+// GetVirtualDevice retrieves a virtual device by IEEE address.
+func (m *MockAdapter) GetVirtualDevice(ieee string) (*fixture.VirtualDevice, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	v, ok := m.virtualDevices[ieee]
+	return v, ok
+}
+

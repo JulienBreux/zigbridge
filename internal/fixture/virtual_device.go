@@ -37,6 +37,15 @@ func NewVirtualDevice(def *DeviceDefinition, ieee string, nwk uint16, emitter Fr
 	}
 }
 
+// Spawn instantiates a virtual device and immediately simulates device join.
+func Spawn(def *DeviceDefinition, ieee string, nwk uint16, emitter FrameEmitter) (*VirtualDevice, error) {
+	v := NewVirtualDevice(def, ieee, nwk, emitter)
+	if err := v.SimulateJoin(); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
 // SimulateJoin fires the device join indication and emits basic identity attribute reports.
 func (v *VirtualDevice) SimulateJoin() error {
 	if v.emitter == nil {

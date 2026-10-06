@@ -15,10 +15,15 @@ type HADevice struct {
 
 // HAEntityConfig models Home Assistant MQTT Discovery configuration.
 type HAEntityConfig struct {
-	Component           string   `json:"-"` // e.g. "sensor", "binary_sensor", "switch", "light"
-	UniqueID            string   `json:"unique_id"`
-	Name                string   `json:"name"`
-	StateTopic          string   `json:"state_topic"`
+	Component           string   `json:"-"` // e.g. "sensor", "binary_sensor", "switch", "light", "device_automation"
+	UniqueID            string   `json:"unique_id,omitempty"`
+	AutomationType      string   `json:"automation_type,omitempty"`
+	Type                string   `json:"type,omitempty"`
+	Subtype             string   `json:"subtype,omitempty"`
+	Payload             string   `json:"payload,omitempty"`
+	TopicStr            string   `json:"topic,omitempty"`
+	Name                string   `json:"name,omitempty"`
+	StateTopic          string   `json:"state_topic,omitempty"`
 	CommandTopic        string   `json:"command_topic,omitempty"`
 	ValueTemplate       string   `json:"value_template,omitempty"`
 	DeviceClass         string   `json:"device_class,omitempty"`
@@ -37,7 +42,11 @@ func (e *HAEntityConfig) Topic(prefix, baseTopic, ieee string) string {
 	if prefix == "" {
 		prefix = "homeassistant"
 	}
-	return fmt.Sprintf("%s/%s/%s/%s/config", prefix, e.Component, ieee, e.UniqueID)
+	id := e.UniqueID
+	if id == "" {
+		id = fmt.Sprintf("action_%s", e.Subtype)
+	}
+	return fmt.Sprintf("%s/%s/%s/%s/config", prefix, e.Component, ieee, id)
 }
 
 // NewOnOffDiscovery builds HA discovery config for an On/Off switch or plug.
@@ -114,5 +123,63 @@ func NewPowerDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 		UnitOfMeasurement: "W",
 		Device:            device,
 		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+	}
+}
+
+// NewBatteryDiscovery builds HA discovery for a battery sensor.
+func NewBatteryDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "sensor",
+		UniqueID:          fmt.Sprintf("%s_battery", ieee),
+		Name:              fmt.Sprintf("%s Battery", device.Name),
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:     "{{ value_json.battery }}",
+		DeviceClass:       "battery",
+		UnitOfMeasurement: "%",
+		Device:            device,
+		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+	}
+}
+
+// NewVoltageDiscovery builds HA discovery for a battery voltage sensor.
+func NewVoltageDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "sensor",
+		UniqueID:          fmt.Sprintf("%s_voltage", ieee),
+		Name:              fmt.Sprintf("%s Voltage", device.Name),
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:     "{{ value_json.voltage }}",
+		DeviceClass:       "voltage",
+		UnitOfMeasurement: "mV",
+		Device:            device,
+		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+	}
+}
+
+// NewActionDiscovery builds HA discovery for a button action sensor.
+func NewActionDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "sensor",
+		UniqueID:          fmt.Sprintf("%s_action", ieee),
+		Name:              fmt.Sprintf("%s Action", device.Name),
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:     "{{ value_json.action }}",
+		Icon:              "mdi:gesture-tap-button",
+		Device:            device,
+		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+	}
+}
+
+// NewDeviceTriggerDiscovery builds HA discovery for a device trigger automation.
+func NewDeviceTriggerDiscovery(device HADevice, ieee, baseTopic, subtype string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:      "device_automation",
+		AutomationType: "trigger",
+		Type:           "action",
+		Subtype:        subtype,
+		Payload:        subtype,
+		TopicStr:       fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:  "{{ value_json.action }}",
+		Device:         device,
 	}
 }

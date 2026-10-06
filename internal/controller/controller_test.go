@@ -350,3 +350,156 @@ func TestControllerPersistenceAndRehydration(t *testing.T) {
 		t.Error("expected Home Assistant discovery publications on controller rehydration")
 	}
 }
+
+func TestVirtualSNZB01PSimulation(t *testing.T) {
+	ctrl, _, mockMQTT := setupTestController(t)
+	ctx := context.Background()
+	if err := ctrl.Start(ctx); err != nil {
+		t.Fatalf("failed to start controller: %v", err)
+	}
+	defer func() { _ = ctrl.Stop() }()
+
+	// 1. Get SNZB-01P definition from embedded registry
+	fixtures := ctrl.Fixtures()
+	if fixtures == nil {
+		t.Fatal("expected fixtures registry in controller")
+	}
+	def, ok := fixtures.Get("SNZB-01P")
+	if !ok {
+		t.Fatal("SNZB-01P fixture definition not found in controller registry")
+	}
+
+	// 2. Spawn virtual device
+	const ieee = "0x00124b00226b8899"
+	const nwk = 0x1234
+	vdev, err := ctrl.SpawnVirtualDevice(def, ieee, nwk)
+	if err != nil {
+		t.Fatalf("failed to spawn virtual device: %v", err)
+	}
+	if vdev == nil {
+		t.Fatal("expected spawned virtual device to be non-nil")
+	}
+
+	// Allow event bus and frame handler to process
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify device registered in controller
+	dev, found := ctrl.GetDevice(ieee)
+	if !found {
+		t.Fatalf("device %s not found in controller", ieee)
+	}
+	if dev.Manufacturer != "SONOFF" {
+		t.Errorf("expected manufacturer SONOFF, got %s", dev.Manufacturer)
+	}
+	if dev.Model != "SNZB-01P" {
+		t.Errorf("expected model SNZB-01P, got %s", dev.Model)
+	}
+	if len(dev.Endpoints) == 0 {
+		t.Error("expected enriched endpoints from fixture")
+	}
+
+	// Verify Home Assistant discovery published
+	messages := mockMQTT.GetMessages()
+	hasActionDiscovery := false
+	hasBatteryDiscovery := false
+	hasVoltageDiscovery := false
+	for _, msg := range messages {
+		if strings.Contains(msg.Topic, "homeassistant/sensor/") && strings.Contains(msg.Topic, "_action/config") {
+			hasActionDiscovery = true
+		}
+		if strings.Contains(msg.Topic, "homeassistant/sensor/") && strings.Contains(msg.Topic, "_battery/config") {
+			hasBatteryDiscovery = true
+		}
+		if strings.Contains(msg.Topic, "homeassistant/sensor/") && strings.Contains(msg.Topic, "_voltage/config") {
+			hasVoltageDiscovery = true
+		}
+	}
+	if !hasActionDiscovery {
+		t.Error("expected action discovery message in MQTT")
+	}
+	if !hasBatteryDiscovery {
+		t.Error("expected battery discovery message in MQTT")
+	}
+	if !hasVoltageDiscovery {
+		t.Error("expected voltage discovery message in MQTT")
+	}
+
+	// 3. Test TriggerAction("single")
+	if err := vdev.TriggerAction("single"); err != nil {
+		t.Fatalf("failed to trigger single action: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	foundSingle := false
+	for _, m := range mockMQTT.GetMessages() {
+		if m.Topic == "zigbridge/"+ieee && strings.Contains(string(m.Payload), `"action":"single"`) {
+			foundSingle = true
+			break
+		}
+	}
+	if !foundSingle {
+		t.Error("expected MQTT message with action:single")
+	}
+
+	// 4. Test TriggerAction("double")
+	if err := vdev.TriggerAction("double"); err != nil {
+		t.Fatalf("failed to trigger double action: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	foundDouble := false
+	for _, m := range mockMQTT.GetMessages() {
+		if m.Topic == "zigbridge/"+ieee && strings.Contains(string(m.Payload), `"action":"double"`) {
+			foundDouble = true
+			break
+		}
+	}
+	if !foundDouble {
+		t.Error("expected MQTT message with action:double")
+	}
+
+	// 5. Test TriggerAction("long")
+	if err := vdev.TriggerAction("long"); err != nil {
+		t.Fatalf("failed to trigger long action: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	foundLong := false
+	for _, m := range mockMQTT.GetMessages() {
+		if m.Topic == "zigbridge/"+ieee && strings.Contains(string(m.Payload), `"action":"long"`) {
+			foundLong = true
+			break
+		}
+	}
+	if !foundLong {
+		t.Error("expected MQTT message with action:long")
+	}
+
+	// 6. Test ReportBattery(95, 3000)
+	if err := vdev.ReportBattery(95, 3000); err != nil {
+		t.Fatalf("failed to report battery: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	foundBattery := false
+	for _, m := range mockMQTT.GetMessages() {
+		if m.Topic == "zigbridge/"+ieee && strings.Contains(string(m.Payload), `"battery":95`) && strings.Contains(string(m.Payload), `"voltage":3000`) {
+			foundBattery = true
+			break
+		}
+	}
+	if !foundBattery {
+		t.Error("expected MQTT message with battery:95 and voltage:3000")
+	}
+
+	// 7. Verify virtual device retrieval from controller
+	vdevs := ctrl.GetVirtualDevices()
+	if len(vdevs) != 1 {
+		t.Errorf("expected 1 virtual device, got %d", len(vdevs))
+	}
+	vdevFound, ok := ctrl.GetVirtualDevice(ieee)
+	if !ok || vdevFound == nil {
+		t.Errorf("expected to find virtual device %s", ieee)
+	}
+}
+

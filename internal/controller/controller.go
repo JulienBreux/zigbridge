@@ -11,10 +11,18 @@ import (
 	"github.com/julienbreux/zigbridge/internal/ai"
 	"github.com/julienbreux/zigbridge/internal/binding"
 	"github.com/julienbreux/zigbridge/internal/config"
+	"github.com/julienbreux/zigbridge/internal/fixture"
 	"github.com/julienbreux/zigbridge/internal/mqtt"
 	"github.com/julienbreux/zigbridge/internal/transport"
 	"github.com/julienbreux/zigbridge/internal/zcl"
 )
+
+// VirtualDeviceManager is an optional interface implemented by adapters supporting simulated devices.
+type VirtualDeviceManager interface {
+	SpawnVirtualDevice(def *fixture.DeviceDefinition, ieee string, nwk uint16) (*fixture.VirtualDevice, error)
+	GetVirtualDevices() []*fixture.VirtualDevice
+	GetVirtualDevice(ieee string) (*fixture.VirtualDevice, bool)
+}
 
 // BridgeStatus reports high-level metrics and coordinator state.
 type BridgeStatus struct {
@@ -41,6 +49,7 @@ type Controller struct {
 	analyzer  ai.Analyzer
 	mqtt      mqtt.Client
 	eventBus  *EventBus
+	fixtures  *fixture.Registry
 
 	mu                  sync.RWMutex
 	startTime           time.Time
@@ -70,6 +79,10 @@ func New(
 	devices := NewDeviceRegistry()
 	store := NewDeviceStore(cfg.Storage.DevicesPath, cfg.Storage.Debounce, devices, bindingEngine)
 
+	fixtures := fixture.NewRegistry()
+	_ = fixtures.LoadEmbedded()
+	_ = fixtures.LoadFromDir("fixtures/devices")
+
 	c := &Controller{
 		cfg:        cfg,
 		transport:  t,
@@ -81,6 +94,7 @@ func New(
 		analyzer:   analyzer,
 		mqtt:       mq,
 		eventBus:   bus,
+		fixtures:   fixtures,
 		cachedRecs: make([]ai.Recommendation, 0),
 	}
 
@@ -236,12 +250,60 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 
 	stateUpdates := make(map[string]interface{})
 
-	// Parse attribute reports if present
-	if frame.CommandID == zcl.CmdReportAttributes || frame.CommandID == zcl.CmdReadAttributesResponse {
+	// Parse attribute reports if present (Global profile commands)
+	isAttributeReport := frame.Header.Type == zcl.FrameTypeGlobal &&
+		(frame.CommandID == zcl.CmdReportAttributes || frame.CommandID == zcl.CmdReadAttributesResponse)
+
+	if isAttributeReport {
 		records, err := zcl.ParseAttributeReport(frame.Payload)
 		if err == nil {
 			for _, rec := range records {
 				switch frame.ClusterID {
+				case zcl.ClusterBasic:
+					switch rec.AttributeID {
+					case 0x0004: // Manufacturer Name
+						if str, ok := rec.Value.(string); ok {
+							existingDev, found := c.devices.Get(frame.SourceAddress)
+							model := ""
+							if found {
+								model = existingDev.Model
+							}
+							c.devices.UpdateModelInfo(frame.SourceAddress, str, model)
+							if c.store != nil {
+								c.store.ScheduleSave()
+							}
+						}
+					case 0x0005: // Model Identifier
+						if str, ok := rec.Value.(string); ok {
+							existingDev, found := c.devices.Get(frame.SourceAddress)
+							mfg := ""
+							if found {
+								mfg = existingDev.Manufacturer
+							}
+							c.devices.UpdateModelInfo(frame.SourceAddress, mfg, str)
+							if c.store != nil {
+								c.store.ScheduleSave()
+							}
+							// Match against fixture registry to enrich metadata and HA discovery
+							if c.fixtures != nil {
+								if def, ok := c.fixtures.Get(str); ok {
+									for _, ep := range def.Device.Endpoints {
+										var inClusters, outClusters []zcl.ClusterID
+										for _, inC := range ep.InputClusters {
+											inClusters = append(inClusters, zcl.ClusterID(inC))
+										}
+										for _, outC := range ep.OutputClusters {
+											outClusters = append(outClusters, zcl.ClusterID(outC))
+										}
+										c.devices.UpdateMetadata(frame.SourceAddress, []uint16{uint16(ep.Endpoint)}, inClusters, outClusters)
+									}
+									if enrichedDev, ok := c.devices.Get(frame.SourceAddress); ok {
+										c.publishDeviceDiscovery(enrichedDev)
+									}
+								}
+							}
+						}
+					}
 				case zcl.ClusterOnOff:
 					if b, ok := rec.Value.(bool); ok {
 						stateUpdates["state"] = "OFF"
@@ -267,8 +329,55 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 					}
 				case zcl.ClusterPowerConfiguration:
 					if val, ok := rec.Value.(uint8); ok {
-						stateUpdates["battery"] = val
+						switch rec.AttributeID {
+						case 0x0021: // BatteryPercentageRemaining (0-200)
+							stateUpdates["battery"] = val / 2
+						case 0x0020: // BatteryVoltage (in 100mV units)
+							stateUpdates["voltage"] = uint16(val) * 100
+						default:
+							stateUpdates["battery"] = val
+						}
 					}
+				}
+			}
+		}
+	}
+
+	// Look up existing device
+	existingDev, _ := c.devices.Get(frame.SourceAddress)
+
+	// Check if this is an action command (non-report, cluster-specific or button command)
+	if !isAttributeReport {
+		matchedAction := false
+		if c.fixtures != nil && existingDev != nil && existingDev.Model != "" {
+			if def, ok := c.fixtures.Get(existingDev.Model); ok {
+				for _, act := range def.Device.Simulations.Actions {
+					if act.Cluster == uint16(frame.ClusterID) && act.Command == frame.CommandID {
+						for k, v := range act.MQTTPayload {
+							stateUpdates[k] = v
+						}
+						matchedAction = true
+						break
+					}
+				}
+			}
+		}
+
+		if !matchedAction && frame.ClusterID == zcl.ClusterOnOff {
+			switch frame.CommandID {
+			case 0x02: // Toggle
+				stateUpdates["action"] = "single"
+			case 0x01: // On
+				if existingDev != nil && (existingDev.Model == "SNZB-01P" || existingDev.Model == "WB01") {
+					stateUpdates["action"] = "double"
+				} else {
+					stateUpdates["action"] = "on"
+				}
+			case 0x00: // Off
+				if existingDev != nil && (existingDev.Model == "SNZB-01P" || existingDev.Model == "WB01") {
+					stateUpdates["action"] = "long"
+				} else {
+					stateUpdates["action"] = "off"
 				}
 			}
 		}
@@ -299,6 +408,9 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 	// Publish state update to MQTT
 	if c.cfg.MQTT.Enabled && c.mqtt != nil && c.mqtt.IsConnected() && len(stateUpdates) > 0 {
 		_ = c.mqtt.PublishDeviceState(frame.SourceAddress, stateUpdates)
+		if friendlyName != frame.SourceAddress {
+			_ = c.mqtt.PublishDeviceState(friendlyName, stateUpdates)
+		}
 	}
 
 	// Broadcast frame & state update on EventBus
@@ -549,7 +661,81 @@ func (c *Controller) publishDeviceDiscovery(dev *Device) {
 		Manufacturer: mfr,
 		Model:        model,
 	}
-	_ = c.mqtt.PublishDiscovery(mqtt.NewOnOffDiscovery(haDev, dev.IEEE, c.cfg.MQTT.BaseTopic))
+
+	baseTopic := c.cfg.MQTT.BaseTopic
+
+	hasInCluster := func(cid zcl.ClusterID) bool {
+		for _, cluster := range dev.InputClusters {
+			if cluster == cid {
+				return true
+			}
+		}
+		return false
+	}
+	hasOutCluster := func(cid zcl.ClusterID) bool {
+		for _, cluster := range dev.OutputClusters {
+			if cluster == cid {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Always publish default on/off if InputClusters has OnOff or by default for basic devices
+	if hasInCluster(zcl.ClusterOnOff) || len(dev.InputClusters) == 0 {
+		_ = c.mqtt.PublishDiscovery(mqtt.NewOnOffDiscovery(haDev, dev.IEEE, baseTopic))
+	}
+
+	// If device acts as a button controller (output cluster OnOff)
+	if hasOutCluster(zcl.ClusterOnOff) {
+		_ = c.mqtt.PublishDiscovery(mqtt.NewActionDiscovery(haDev, dev.IEEE, baseTopic))
+		for _, action := range []string{"single", "double", "long"} {
+			_ = c.mqtt.PublishDiscovery(mqtt.NewDeviceTriggerDiscovery(haDev, dev.IEEE, baseTopic, action))
+		}
+	}
+
+	// Power & Battery
+	if hasInCluster(zcl.ClusterPowerConfiguration) || dev.Battery > 0 {
+		_ = c.mqtt.PublishDiscovery(mqtt.NewBatteryDiscovery(haDev, dev.IEEE, baseTopic))
+		_ = c.mqtt.PublishDiscovery(mqtt.NewVoltageDiscovery(haDev, dev.IEEE, baseTopic))
+	}
+
+	// Temperature & Humidity
+	if hasInCluster(zcl.ClusterTemperatureMeasurement) {
+		_ = c.mqtt.PublishDiscovery(mqtt.NewTemperatureDiscovery(haDev, dev.IEEE, baseTopic))
+	}
+	if hasInCluster(zcl.ClusterRelativeHumidity) {
+		_ = c.mqtt.PublishDiscovery(mqtt.NewHumidityDiscovery(haDev, dev.IEEE, baseTopic))
+	}
+}
+
+// Fixtures returns the fixture registry containing loaded device definitions.
+func (c *Controller) Fixtures() *fixture.Registry {
+	return c.fixtures
+}
+
+// SpawnVirtualDevice creates and registers a virtual device if the adapter supports it.
+func (c *Controller) SpawnVirtualDevice(def *fixture.DeviceDefinition, ieee string, nwk uint16) (*fixture.VirtualDevice, error) {
+	if vdm, ok := c.adapter.(VirtualDeviceManager); ok {
+		return vdm.SpawnVirtualDevice(def, ieee, nwk)
+	}
+	return nil, fmt.Errorf("virtual devices not supported by adapter %s", c.adapter.Info().Type)
+}
+
+// GetVirtualDevices returns all currently active virtual devices if running on a mock adapter.
+func (c *Controller) GetVirtualDevices() []*fixture.VirtualDevice {
+	if vdm, ok := c.adapter.(VirtualDeviceManager); ok {
+		return vdm.GetVirtualDevices()
+	}
+	return nil
+}
+
+// GetVirtualDevice retrieves a virtual device by its IEEE address if running on a mock adapter.
+func (c *Controller) GetVirtualDevice(ieee string) (*fixture.VirtualDevice, bool) {
+	if vdm, ok := c.adapter.(VirtualDeviceManager); ok {
+		return vdm.GetVirtualDevice(ieee)
+	}
+	return nil, false
 }
 
 // GetBindings returns all active direct bindings.

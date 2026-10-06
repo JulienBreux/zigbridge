@@ -64,4 +64,30 @@ func TestHADiscoveryGeneration(t *testing.T) {
 	if !strings.Contains(config.StateTopic, "0x00158D0001") {
 		t.Errorf("expected state topic to contain IEEE, got %s", config.StateTopic)
 	}
+
+	// Test Battery Discovery
+	batConfig := mqtt.NewBatteryDiscovery(dev, "0x00158D0001", "zigbridge")
+	if batConfig.DeviceClass != "battery" || batConfig.UnitOfMeasurement != "%" {
+		t.Errorf("unexpected battery config: %+v", batConfig)
+	}
+
+	// Test Voltage Discovery
+	voltConfig := mqtt.NewVoltageDiscovery(dev, "0x00158D0001", "zigbridge")
+	if voltConfig.DeviceClass != "voltage" || voltConfig.UnitOfMeasurement != "mV" {
+		t.Errorf("unexpected voltage config: %+v", voltConfig)
+	}
+
+	// Test Action Discovery
+	actConfig := mqtt.NewActionDiscovery(dev, "0x00158D0001", "zigbridge")
+	if actConfig.ValueTemplate != "{{ value_json.action }}" {
+		t.Errorf("unexpected action config: %+v", actConfig)
+	}
+
+	// Test Device Trigger Discovery
+	trigConfig := mqtt.NewDeviceTriggerDiscovery(dev, "0x00158D0001", "zigbridge", "single")
+	trigTopic := trigConfig.Topic("homeassistant", "zigbridge", "0x00158D0001")
+	expectedTrigTopic := "homeassistant/device_automation/0x00158D0001/action_single/config"
+	if trigTopic != expectedTrigTopic {
+		t.Errorf("expected trigger topic %s, got %s", expectedTrigTopic, trigTopic)
+	}
 }
