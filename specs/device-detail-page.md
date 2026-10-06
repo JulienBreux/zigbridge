@@ -76,12 +76,16 @@ internal/
 - **Navigation Trigger**: Clicking any device row, avatar, or friendly name in the main Devices table navigates to `#/devices/{ieee}`.
 - **Hash-based Client Routing**:
   - `#/devices` (or default): Shows the primary devices table and navigation tabs.
-  - `#/devices/{ieee}`: Automatically hides the table view and reveals the `#view-device-detail` view.
+  - `#/devices/{ieee}`: Automatically hides the primary tabs/table and reveals the `#view-device-detail` view.
   - Supports browser forward/back buttons (`window.addEventListener('hashchange', ...)`).
 - **Header Breadcrumb**: A prominent top bar provides `← Back to Devices`, the device friendly name, model badge, and online/offline status.
+- **Device Detail Sub-Tabs**:
+  - Below the top breadcrumb header, the Device Detail page provides two distinct sub-tabs:
+    - **`[Exposes]` (Default Tab)**: Interactive controls, toggles, sliders, mode chips, telemetry readouts, and action buttons.
+    - **`[About]`**: Hardware specifications, network details, LQI, IEEE, NWK, endpoints, clusters, power/battery, availability.
 
-### 5.2 Section 1: About Device (Hardware & Mesh Identity)
-Rendered as a responsive card grid at the top of the detail page:
+### 5.2 Sub-Tab 1: About Device (Hardware & Mesh Identity)
+Rendered as responsive card groups when the `[About]` sub-tab is active:
 1. **Identity & Identification**:
    - Friendly Name (with inline rename modal/input)
    - Model identifier & Manufacturer / Vendor
@@ -97,8 +101,8 @@ Rendered as a responsive card grid at the top of the detail page:
    - Signal Quality (LQI 0–255 with graphical bar, qualitative rating `Excellent`/`Good`/`Fair`/`Poor`, and estimated dBm)
    - Availability status (`Online` / `Offline`) and Last Seen timestamp
 
-### 5.3 Section 2: Exposes & Device Controls
-Directly replicating the layout and visual hierarchy shown in the reference screenshot:
+### 5.3 Sub-Tab 2: Exposes & Device Controls
+Directly replicating the layout and visual hierarchy shown in the reference screenshot when the `[Exposes]` sub-tab is active:
 - **Card Container**: A clean list of capability rows separated by subtle dividers (`var(--border-subtle)`).
 - **Row Anatomy**:
   - **Icon (Left)**: Visual category glyph (Star for State, Clock for Timers, Lightning for Power/Voltage/Current/Energy, Lock for Child Lock, Hand for Identify, Signal Bars for Link Quality, Thermometer for Climate, etc.).
@@ -270,6 +274,6 @@ function renderExposeRow(dev, expose) {
 2. **Fixture Exposes Association**: If a device matches a definition in the fixture catalog (by `model` or `zigbee_models`), its `exposes` schema is used to dynamically construct the controls. If a device has no catalog definition, generic controls are generated based on its input/output cluster list (e.g., Cluster 6 = On/Off switch, Cluster 8 = Level slider, Cluster 1026 = Temperature readout).
 3. **Mock & Real Device Uniformity**: In Mock coordinator mode, `POST /api/devices/{ieee}/set` and `/action` seamlessly interact with `VirtualDevice` and update state. In physical coordinator mode, it dispatches corresponding ZCL frames to the adapter.
 
-### Open Questions for Human Review
-1. **Control Placement**: Should the About Section be placed side-by-side with the Controls (two columns on wide screens) or stacked vertically (About cards on top, Exposes list underneath as shown in the spec)?
-2. **Direct State Write Endpoint**: Do you approve adding `POST /api/devices/{ieee}/set` (accepting `{"property": value}`) and `GET /api/devices/{ieee}` (returning the combined device + fixture definition) to [`internal/web/server.go`](file:///Users/julienbreux/Projects/julienbreux/zigbridge/internal/web/server.go)?
+### Resolved Design Decisions
+1. **Control Placement**: Confirmed to use dedicated sub-tabs within the Device Detail page (`[Exposes]` and `[About]`), keeping the interface focused, clean, and directly aligned with Zigbee2MQTT UX.
+2. **Direct State Write Endpoint**: Confirmed addition of `GET /api/devices/{ieee}` (returning device + resolved fixture definition) and `POST /api/devices/{ieee}/set` (accepting property updates) to `internal/web/server.go`.
