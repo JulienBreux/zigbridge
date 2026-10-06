@@ -41,19 +41,40 @@ const (
 	CmdSYSResetInd          uint16 = 0x4180
 	CmdSYSVersion           uint16 = 0x2102
 	CmdSYSVersionRsp        uint16 = 0x6102
-	CmdUTILGetDeviceInfo    uint16 = 0x2700
-	CmdUTILGetDeviceInfoRsp uint16 = 0x6700
-	CmdUTILPermitJoinReq    uint16 = 0x270B
-	CmdUTILPermitJoinRsp    uint16 = 0x670B
+	CmdAFRegister           uint16 = 0x2400
+	CmdAFRegisterRsp        uint16 = 0x6400
+	CmdAFDataRequest        uint16 = 0x2401
+	CmdAFDataRequestRsp     uint16 = 0x6401
+	CmdAFIncomingMsg        uint16 = 0x4481
 	CmdZDOMgmtPermitJoinReq uint16 = 0x2536
 	CmdZDOMgmtPermitJoinRsp uint16 = 0x6536
+	CmdZDOStartupFromApp    uint16 = 0x2540
+	CmdZDOStartupFromAppRsp uint16 = 0x6540
+	CmdZDOStateChangeInd    uint16 = 0x45C0
 	CmdZDOTCDevInd          uint16 = 0x45CA
 	CmdZDOEndDeviceAnnceInd uint16 = 0x45C1
 	CmdZDOBindReq           uint16 = 0x2521
 	CmdZDOUnbindReq         uint16 = 0x2522
-	CmdAFDataRequest        uint16 = 0x2401
-	CmdAFDataRequestRsp     uint16 = 0x6401
-	CmdAFIncomingMsg        uint16 = 0x4481
+	CmdZBWriteConfiguration uint16 = 0x2605
+	CmdZBPermitJoiningReq   uint16 = 0x2608
+	CmdZBPermitJoiningRsp   uint16 = 0x6608
+	CmdUTILGetDeviceInfo    uint16 = 0x2700
+	CmdUTILGetDeviceInfoRsp uint16 = 0x6700
+	CmdUTILPermitJoinReq    uint16 = 0x270B
+	CmdUTILPermitJoinRsp    uint16 = 0x670B
+)
+
+const (
+	DevStateHold            byte = 0
+	DevStateInit            byte = 1
+	DevStateNwkDisc         byte = 2
+	DevStateNwkJoining      byte = 3
+	DevStateNwkRejoin       byte = 4
+	DevStateEndDeviceUnauth byte = 5
+	DevStateEndDevice       byte = 6
+	DevStateRouter          byte = 7
+	DevStateCoordStarting   byte = 8
+	DevStateZbCoord         byte = 9
 )
 
 var (
@@ -120,6 +141,18 @@ func (z *ZStackAdapter) Init(ctx context.Context, t transport.Transport) error {
 	return nil
 }
 
+func (z *ZStackAdapter) writeConfig(configID byte, val []byte) error {
+	data := make([]byte, 2+len(val))
+	data[0] = configID
+	data[1] = byte(len(val))
+	copy(data[2:], val)
+	return z.sendFrame(&MTFrame{
+		Cmd0: TypeSREQ | SubsystemSAPI,
+		Cmd1: 0x05, // ZB_WRITE_CONFIGURATION
+		Data: data,
+	})
+}
+
 func (z *ZStackAdapter) Start(ctx context.Context) error {
 	z.mu.Lock()
 	if z.running {
@@ -130,18 +163,47 @@ func (z *ZStackAdapter) Start(ctx context.Context) error {
 	readCtx, cancel := context.WithCancel(ctx)
 	z.cancel = cancel
 	z.running = true
-	z.info.Status = "running"
+	z.info.Status = "starting"
 	z.mu.Unlock()
 
 	go z.readLoop(readCtx)
 
-	// Send non-disruptive queries to coordinator
-	// 1. SYS_PING (0x2101)
+	// Step 1: Send non-disruptive queries to coordinator
+	// SYS_PING (0x2101)
 	_ = z.sendFrame(&MTFrame{Cmd0: TypeSREQ | SubsystemSYS, Cmd1: 0x01, Data: nil})
-	// 2. SYS_VERSION (0x2102)
+	// SYS_VERSION (0x2102)
 	_ = z.sendFrame(&MTFrame{Cmd0: TypeSREQ | SubsystemSYS, Cmd1: 0x02, Data: nil})
-	// 3. UTIL_GET_DEVICE_INFO (0x2700)
+	// UTIL_GET_DEVICE_INFO (0x2700)
 	_ = z.sendFrame(&MTFrame{Cmd0: TypeSREQ | SubsystemUTIL, Cmd1: 0x00, Data: nil})
+
+	// Step 2: Ensure ZDO_DIRECT_CB (0x8F = 143) is enabled so device join indications
+	// and end device announcements are dispatched to the host.
+	_ = z.writeConfig(0x8F, []byte{0x01})
+
+	// Step 3: Register Home Automation Endpoint 1 (Profile 0x0104)
+	epFrame := MTFrame{
+		Cmd0: TypeSREQ | SubsystemAF,
+		Cmd1: 0x00, // AF_REGISTER
+		Data: []byte{
+			0x01,       // Endpoint 1
+			0x04, 0x01, // AppProfileID: 0x0104 (HA)
+			0x05, 0x00, // AppDeviceID: 0x0005 (Coordinator/Gateway)
+			0x00,       // AppDevVer: 0
+			0x00,       // LatencyReq: 0
+			0x00,       // AppNumInClusters: 0
+			0x00,       // AppNumOutClusters: 0
+		},
+	}
+	_ = z.sendFrame(&epFrame)
+
+	// Step 4: Ensure coordinator Zigbee network stack is active
+	startupDelay := make([]byte, 2)
+	binary.LittleEndian.PutUint16(startupDelay, 100) // 100ms delay
+	_ = z.sendFrame(&MTFrame{
+		Cmd0: TypeSREQ | SubsystemZDO,
+		Cmd1: 0x40, // ZDO_STARTUP_FROM_APP
+		Data: startupDelay,
+	})
 
 	return nil
 }
@@ -180,14 +242,12 @@ func (z *ZStackAdapter) PermitJoin(ctx context.Context, duration uint8) error {
 		Cmd1: 0x0B,
 		Data: []byte{duration},
 	}
-	if err := z.sendFrame(&utilFrame); err != nil {
-		return fmt.Errorf("util permit join failed: %w", err)
-	}
+	_ = z.sendFrame(&utilFrame)
 
 	// 2. ZDO_MGMT_PERMIT_JOIN_REQ (0x2536) - Broadcast to all routers & coordinator (0xFFFC)
-	// AddrMode: 0x02 (16-bit address), DstAddr: 0xFFFC, Duration: duration, TCSignificance: 0x01
+	// AddrMode: 0x0F (ADDR_BROADCAST = 15), DstAddr: 0xFFFC, Duration: duration, TCSignificance: 0x01
 	zdoBroadcastData := []byte{
-		0x02,       // AddrMode: 16-bit
+		0x0F,       // AddrMode: 15 (AddrBroadcast)
 		0xFC, 0xFF, // DstAddr: 0xFFFC
 		duration,   // Duration in seconds
 		0x01,       // TCSignificance: 1 (Trust Center Link Key exchange permitted)
@@ -200,6 +260,7 @@ func (z *ZStackAdapter) PermitJoin(ctx context.Context, duration uint8) error {
 	_ = z.sendFrame(&zdoBroadcast)
 
 	// 3. ZDO_MGMT_PERMIT_JOIN_REQ (0x2536) - Unicast directly to coordinator (0x0000)
+	// AddrMode: 0x02 (ADDR_16BIT = 2), DstAddr: 0x0000, Duration: duration, TCSignificance: 0x01
 	zdoUnicastData := []byte{
 		0x02,       // AddrMode: 16-bit
 		0x00, 0x00, // DstAddr: 0x0000
@@ -212,6 +273,14 @@ func (z *ZStackAdapter) PermitJoin(ctx context.Context, duration uint8) error {
 		Data: zdoUnicastData,
 	}
 	_ = z.sendFrame(&zdoUnicast)
+
+	// 4. ZB_PERMIT_JOINING_REQUEST (0x2608) - SAPI subsystem
+	zbFrame := MTFrame{
+		Cmd0: TypeSREQ | SubsystemSAPI,
+		Cmd1: 0x08,
+		Data: []byte{0xFC, 0xFF, duration},
+	}
+	_ = z.sendFrame(&zbFrame)
 
 	return nil
 }
@@ -403,11 +472,60 @@ func (z *ZStackAdapter) handleIncomingMT(cmd0, cmd1 byte, data []byte) {
 	case CmdUTILGetDeviceInfoRsp: // 0x6700
 		if len(data) >= 9 && data[0] == 0 {
 			coordIEEE := fmt.Sprintf("0x%016X", binary.LittleEndian.Uint64(data[1:9]))
+			var devState byte
+			if len(data) >= 13 {
+				devState = data[12]
+			}
 			z.mu.Lock()
 			z.info.IEEE = coordIEEE
-			z.info.Status = "ready"
+			if devState == DevStateZbCoord {
+				z.info.Status = "ready"
+			}
 			z.mu.Unlock()
-			log.Printf("[ZSTACK] Coordinator device info: IEEE=%s", coordIEEE)
+			log.Printf("[ZSTACK] Coordinator device info: IEEE=%s State=%d", coordIEEE, devState)
+
+			if devState != DevStateZbCoord {
+				log.Printf("[ZSTACK] Coordinator state is %d (expected DevStateZbCoord=9); requesting ZDO_STARTUP_FROM_APP", devState)
+				startupDelay := make([]byte, 2)
+				binary.LittleEndian.PutUint16(startupDelay, 100)
+				_ = z.sendFrame(&MTFrame{
+					Cmd0: TypeSREQ | SubsystemZDO,
+					Cmd1: 0x40, // ZDO_STARTUP_FROM_APP
+					Data: startupDelay,
+				})
+			}
+		}
+
+	case CmdZDOStartupFromAppRsp: // 0x6540
+		if len(data) > 0 {
+			status := data[0]
+			statusStr := "unknown"
+			switch status {
+			case 0:
+				statusStr = "restored network"
+			case 1:
+				statusStr = "new network"
+			case 2:
+				statusStr = "failed"
+			}
+			log.Printf("[ZSTACK] ZDO_STARTUP_FROM_APP_RSP: Status=0x%02X (%s)", status, statusStr)
+		}
+
+	case CmdZDOStateChangeInd: // 0x45C0
+		if len(data) > 0 {
+			state := data[0]
+			log.Printf("[ZSTACK] Coordinator network state change: %d", state)
+			if state == DevStateZbCoord {
+				z.mu.Lock()
+				z.info.Status = "ready"
+				z.mu.Unlock()
+				log.Printf("[ZSTACK] Coordinator network is operational (DevStateZbCoord=9)")
+			}
+		}
+
+	case CmdAFRegisterRsp: // 0x6400
+		if len(data) > 0 {
+			log.Printf("[ZSTACK] AF_REGISTER_RSP: Status=0x%02X", data[0])
 		}
 
 	case CmdSYSVersionRsp: // 0x6102
@@ -513,6 +631,11 @@ func (z *ZStackAdapter) handleIncomingMT(cmd0, cmd1 byte, data []byte) {
 	case CmdZDOMgmtPermitJoinRsp: // 0x6536
 		if len(data) > 0 {
 			log.Printf("[ZSTACK] ZDO_MGMT_PERMIT_JOIN_RSP received: Status=0x%02X", data[0])
+		}
+
+	case CmdZBPermitJoiningRsp: // 0x6608
+		if len(data) > 0 {
+			log.Printf("[ZSTACK] ZB_PERMIT_JOINING_RSP received: Status=0x%02X", data[0])
 		}
 	}
 }

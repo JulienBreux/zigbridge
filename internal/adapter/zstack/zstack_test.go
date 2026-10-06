@@ -87,8 +87,8 @@ func TestZStackPermitJoinFraming(t *testing.T) {
 	}
 
 	frames := trans.getWritten()
-	if len(frames) != 3 {
-		t.Fatalf("expected 3 permit join frames, got %d", len(frames))
+	if len(frames) != 4 {
+		t.Fatalf("expected 4 permit join frames, got %d", len(frames))
 	}
 
 	// 1. UTIL_PERMIT_JOIN_REQ: SubsystemUTIL (0x07), Cmd 0x0B, duration 60
@@ -100,13 +100,16 @@ func TestZStackPermitJoinFraming(t *testing.T) {
 		t.Errorf("expected util duration 60, got %v", utilFrame.data)
 	}
 
-	// 2. ZDO_MGMT_PERMIT_JOIN_REQ broadcast: SubsystemZDO (0x05), Cmd 0x36, DstAddr 0xFFFC, TCSig 0x01
+	// 2. ZDO_MGMT_PERMIT_JOIN_REQ broadcast: SubsystemZDO (0x05), Cmd 0x36, AddrMode 0x0F, DstAddr 0xFFFC, TCSig 0x01
 	bcastFrame := frames[1]
 	if (bcastFrame.cmd0 & 0x1F) != SubsystemZDO || bcastFrame.cmd1 != 0x36 {
 		t.Errorf("expected ZDO_MGMT_PERMIT_JOIN_REQ broadcast, got cmd0=0x%02X cmd1=0x%02X", bcastFrame.cmd0, bcastFrame.cmd1)
 	}
 	if len(bcastFrame.data) < 5 {
 		t.Fatalf("broadcast data too short: %v", bcastFrame.data)
+	}
+	if bcastFrame.data[0] != 0x0F {
+		t.Errorf("expected broadcast AddrMode 0x0F, got 0x%02X", bcastFrame.data[0])
 	}
 	dstAddr := binary.LittleEndian.Uint16(bcastFrame.data[1:3])
 	if dstAddr != 0xFFFC {
@@ -119,10 +122,13 @@ func TestZStackPermitJoinFraming(t *testing.T) {
 		t.Errorf("expected broadcast TCSignificance 0x01, got %d", bcastFrame.data[4])
 	}
 
-	// 3. ZDO_MGMT_PERMIT_JOIN_REQ unicast: SubsystemZDO (0x05), Cmd 0x36, DstAddr 0x0000, TCSig 0x01
+	// 3. ZDO_MGMT_PERMIT_JOIN_REQ unicast: SubsystemZDO (0x05), Cmd 0x36, AddrMode 0x02, DstAddr 0x0000, TCSig 0x01
 	unicastFrame := frames[2]
 	if len(unicastFrame.data) < 5 {
 		t.Fatalf("unicast data too short: %v", unicastFrame.data)
+	}
+	if unicastFrame.data[0] != 0x02 {
+		t.Errorf("expected unicast AddrMode 0x02, got 0x%02X", unicastFrame.data[0])
 	}
 	dstAddrU := binary.LittleEndian.Uint16(unicastFrame.data[1:3])
 	if dstAddrU != 0x0000 {
@@ -130,6 +136,36 @@ func TestZStackPermitJoinFraming(t *testing.T) {
 	}
 	if unicastFrame.data[4] != 0x01 {
 		t.Errorf("expected unicast TCSignificance 0x01, got %d", unicastFrame.data[4])
+	}
+
+	// 4. ZB_PERMIT_JOINING_REQUEST: SubsystemSAPI (0x06), Cmd 0x08, Data [0xFC, 0xFF, 60]
+	sapiFrame := frames[3]
+	if (sapiFrame.cmd0 & 0x1F) != SubsystemSAPI || sapiFrame.cmd1 != 0x08 {
+		t.Errorf("expected ZB_PERMIT_JOINING_REQUEST, got cmd0=0x%02X cmd1=0x%02X", sapiFrame.cmd0, sapiFrame.cmd1)
+	}
+	if len(sapiFrame.data) != 3 || sapiFrame.data[2] != 60 {
+		t.Errorf("expected sapi permit join duration 60, got %v", sapiFrame.data)
+	}
+}
+
+func TestZStackStartupAndStateChange(t *testing.T) {
+	trans := &mockZStackTransport{}
+	z := New(20, 0x1A62, "00124B0001020304")
+	ctx := context.Background()
+
+	_ = z.Init(ctx, trans)
+	_ = z.Start(ctx)
+
+	frames := trans.getWritten()
+	if len(frames) < 6 {
+		t.Fatalf("expected at least 6 startup frames, got %d", len(frames))
+	}
+
+	// Test state change indication 0x45C0
+	z.handleIncomingMT(TypeAREQ|SubsystemZDO, 0xC0, []byte{DevStateZbCoord})
+	info := z.Info()
+	if info.Status != "ready" {
+		t.Errorf("expected status ready after DevStateZbCoord indication, got %s", info.Status)
 	}
 }
 

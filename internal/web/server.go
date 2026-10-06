@@ -201,14 +201,20 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePermitJoin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Time uint8 `json:"time"`
+		Time     uint8 `json:"time"`
+		Duration uint8 `json:"duration"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
 		return
 	}
 
-	if err := s.controller.PermitJoin(r.Context(), body.Time); err != nil {
+	duration := body.Time
+	if duration == 0 && body.Duration > 0 {
+		duration = body.Duration
+	}
+
+	if err := s.controller.PermitJoin(r.Context(), duration); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -218,7 +224,7 @@ func (s *Server) handlePermitJoin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":  true,
-		"duration": body.Time,
+		"duration": duration,
 	})
 }
 
