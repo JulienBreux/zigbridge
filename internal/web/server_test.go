@@ -23,7 +23,7 @@ import (
 	"github.com/julienbreux/zigbridge/internal/zcl"
 )
 
-func setupTestServer(t *testing.T) (*web.Server, *controller.Controller, string, func()) {
+func setupTestServer(t *testing.T) (*web.Server, *controller.Controller, string) {
 	cfg := config.Default()
 	cfg.Storage.DevicesPath = filepath.Join(t.TempDir(), "devices.yaml")
 	cfg.Web.ListenAddr = "127.0.0.1:0" // Random available port
@@ -33,7 +33,7 @@ func setupTestServer(t *testing.T) (*web.Server, *controller.Controller, string,
 	mockMQ := mqtt.NewMockClient()
 
 	ctrl := controller.New(cfg, mockTrans, mockAdp, mockMQ)
-	ctx := context.Background()
+	ctx := t.Context()
 	if err := ctrl.Start(ctx); err != nil {
 		t.Fatalf("failed to start controller: %v", err)
 	}
@@ -46,19 +46,18 @@ func setupTestServer(t *testing.T) (*web.Server, *controller.Controller, string,
 	addr := srv.Addr().String()
 	baseURL := fmt.Sprintf("http://%s", addr)
 
-	teardown := func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	t.Cleanup(func() {
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 2*time.Second)
 		defer cancel()
 		_ = srv.Stop(stopCtx)
 		_ = ctrl.Stop()
-	}
+	})
 
-	return srv, ctrl, baseURL, teardown
+	return srv, ctrl, baseURL
 }
 
 func TestWebStaticAssets(t *testing.T) {
-	_, _, baseURL, teardown := setupTestServer(t)
-	defer teardown()
+	_, _, baseURL := setupTestServer(t)
 
 	resp, err := http.Get(baseURL + "/")
 	if err != nil {
@@ -77,8 +76,7 @@ func TestWebStaticAssets(t *testing.T) {
 }
 
 func TestWebAPIStatus(t *testing.T) {
-	_, _, baseURL, teardown := setupTestServer(t)
-	defer teardown()
+	_, _, baseURL := setupTestServer(t)
 
 	resp, err := http.Get(baseURL + "/api/status")
 	if err != nil {
@@ -101,8 +99,7 @@ func TestWebAPIStatus(t *testing.T) {
 }
 
 func TestWebAPIPermitJoin(t *testing.T) {
-	_, ctrl, baseURL, teardown := setupTestServer(t)
-	defer teardown()
+	_, ctrl, baseURL := setupTestServer(t)
 
 	payload := `{"time": 45}`
 	resp, err := http.Post(baseURL+"/api/network/permit-join", "application/json", strings.NewReader(payload))
@@ -122,8 +119,7 @@ func TestWebAPIPermitJoin(t *testing.T) {
 }
 
 func TestWebAPIDevicesAndRename(t *testing.T) {
-	_, ctrl, baseURL, teardown := setupTestServer(t)
-	defer teardown()
+	_, ctrl, baseURL := setupTestServer(t)
 
 	// Register device via join handler
 	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{
@@ -167,8 +163,7 @@ func TestWebAPIDevicesAndRename(t *testing.T) {
 }
 
 func TestWebAPIBindings(t *testing.T) {
-	_, ctrl, baseURL, teardown := setupTestServer(t)
-	defer teardown()
+	_, ctrl, baseURL := setupTestServer(t)
 
 	// Populate devices
 	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{IEEE: "0xSW01", NWK: 0x2001})
@@ -232,8 +227,7 @@ func TestWebAPIBindings(t *testing.T) {
 }
 
 func TestWebAPIRecommendationsAndApply(t *testing.T) {
-	_, ctrl, baseURL, teardown := setupTestServer(t)
-	defer teardown()
+	_, ctrl, baseURL := setupTestServer(t)
 
 	// Register compatible switch and bulb
 	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{IEEE: "0x00158D0001", NWK: 0x1001})
@@ -281,8 +275,7 @@ func TestWebAPIRecommendationsAndApply(t *testing.T) {
 }
 
 func TestWebWebSocketLiveStream(t *testing.T) {
-	srv, ctrl, _, teardown := setupTestServer(t)
-	defer teardown()
+	srv, ctrl, _ := setupTestServer(t)
 
 	wsURL := fmt.Sprintf("ws://%s/api/events", srv.Addr().String())
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
@@ -311,8 +304,7 @@ func TestWebWebSocketLiveStream(t *testing.T) {
 }
 
 func TestWebSimulationLab(t *testing.T) {
-	_, ctrl, baseURL, teardown := setupTestServer(t)
-	defer teardown()
+	_, ctrl, baseURL := setupTestServer(t)
 
 	// 1. GET /api/test/status
 	statusResp, err := http.Get(baseURL + "/api/test/status")

@@ -1,7 +1,6 @@
 package controller_test
 
 import (
-	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -27,12 +26,15 @@ func setupTestController(t *testing.T) (*controller.Controller, *mock.MockAdapte
 	mockMQTT := mqtt.NewMockClient()
 
 	ctrl := controller.New(cfg, mockTrans, mockAdp, mockMQTT)
+	t.Cleanup(func() {
+		_ = ctrl.Stop()
+	})
 	return ctrl, mockAdp, mockMQTT
 }
 
 func TestControllerLifecycleAndStatus(t *testing.T) {
 	ctrl, _, _ := setupTestController(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	if err := ctrl.Start(ctx); err != nil {
 		t.Fatalf("failed to start controller: %v", err)
@@ -53,9 +55,8 @@ func TestControllerLifecycleAndStatus(t *testing.T) {
 
 func TestControllerPermitJoin(t *testing.T) {
 	ctrl, _, _ := setupTestController(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	_ = ctrl.Start(ctx)
-	defer func() { _ = ctrl.Stop() }()
 
 	busCh := ctrl.EventBus().Subscribe(10)
 	defer ctrl.EventBus().Unsubscribe(busCh)
@@ -82,9 +83,8 @@ func TestControllerPermitJoin(t *testing.T) {
 
 func TestControllerIncomingFrameAndMQTT(t *testing.T) {
 	ctrl, mockAdp, mockMQTT := setupTestController(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	_ = ctrl.Start(ctx)
-	defer func() { _ = ctrl.Stop() }()
 
 	// Simulate device join
 	mockAdp.EmitDeviceJoin(adapter.DeviceJoinInfo{
@@ -152,9 +152,8 @@ func TestControllerIncomingFrameAndMQTT(t *testing.T) {
 
 func TestControllerOptimisticDirectBinding(t *testing.T) {
 	ctrl, _, _ := setupTestController(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	_ = ctrl.Start(ctx)
-	defer func() { _ = ctrl.Stop() }()
 
 	// Direct binding between two addresses not yet registered
 	req := adapter.BindRequest{
@@ -196,9 +195,8 @@ func TestControllerOptimisticDirectBinding(t *testing.T) {
 
 func TestControllerOnDemandRecommendations(t *testing.T) {
 	ctrl, mockAdp, _ := setupTestController(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	_ = ctrl.Start(ctx)
-	defer func() { _ = ctrl.Stop() }()
 
 	// Register a switch (output OnOff) and a bulb (input OnOff)
 	mockAdp.EmitDeviceJoin(adapter.DeviceJoinInfo{IEEE: "0x00158D0001111111", NWK: 0x1111})
@@ -240,7 +238,7 @@ func TestControllerPersistenceAndRehydration(t *testing.T) {
 	mockMQTT1 := mqtt.NewMockClient()
 
 	ctrl1 := controller.New(cfg1, mockTrans1, mockAdp1, mockMQTT1)
-	ctx := context.Background()
+	ctx := t.Context()
 	if err := ctrl1.Start(ctx); err != nil {
 		t.Fatalf("failed to start ctrl1: %v", err)
 	}
@@ -296,10 +294,12 @@ func TestControllerPersistenceAndRehydration(t *testing.T) {
 	mockMQTT2 := mqtt.NewMockClient()
 
 	ctrl2 := controller.New(cfg2, mockTrans2, mockAdp2, mockMQTT2)
+	t.Cleanup(func() {
+		_ = ctrl2.Stop()
+	})
 	if err := ctrl2.Start(ctx); err != nil {
 		t.Fatalf("failed to start ctrl2: %v", err)
 	}
-	defer func() { _ = ctrl2.Stop() }()
 
 	// Assert devices rehydrated
 	devs := ctrl2.GetDevices()
@@ -353,11 +353,10 @@ func TestControllerPersistenceAndRehydration(t *testing.T) {
 
 func TestVirtualSNZB01PSimulation(t *testing.T) {
 	ctrl, _, mockMQTT := setupTestController(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	if err := ctrl.Start(ctx); err != nil {
 		t.Fatalf("failed to start controller: %v", err)
 	}
-	defer func() { _ = ctrl.Stop() }()
 
 	// 1. Get SNZB-01P definition from embedded registry
 	fixtures := ctrl.Fixtures()
@@ -505,11 +504,10 @@ func TestVirtualSNZB01PSimulation(t *testing.T) {
 
 func TestVirtualA7ZSimulation(t *testing.T) {
 	ctrl, _, mockMQTT := setupTestController(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	if err := ctrl.Start(ctx); err != nil {
 		t.Fatalf("failed to start controller: %v", err)
 	}
-	defer func() { _ = ctrl.Stop() }()
 
 	fixtures := ctrl.Fixtures()
 	if fixtures == nil {
@@ -657,9 +655,11 @@ func TestDeviceRegistryDualLookupAndInterview(t *testing.T) {
 	mockMQTT := mqtt.NewMockClient()
 
 	ctrl := controller.New(cfg, mockTrans, mockAdp, mockMQTT)
-	ctx := context.Background()
+	t.Cleanup(func() {
+		_ = ctrl.Stop()
+	})
+	ctx := t.Context()
 	_ = ctrl.Start(ctx)
-	defer func() { _ = ctrl.Stop() }()
 
 	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{
 		IEEE: "0x00124B000A7Z0001",

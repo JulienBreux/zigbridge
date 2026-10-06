@@ -1,7 +1,6 @@
 package binding_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/julienbreux/zigbridge/internal/adapter"
@@ -13,7 +12,7 @@ import (
 func TestBindingEngine(t *testing.T) {
 	mockAdapter := mock.New(20, 0x1A62)
 	engine := binding.NewEngine(mockAdapter)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	changedCount := 0
 	engine.SetChangeListener(func(b *binding.Binding, action string) {

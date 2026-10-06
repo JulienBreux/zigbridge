@@ -1,7 +1,6 @@
 package mqtt_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -10,7 +9,7 @@ import (
 
 func TestMockClientPublishSubscribe(t *testing.T) {
 	client := mqtt.NewMockClient()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("failed to connect mock client: %v", err)

@@ -39,7 +39,7 @@ func TestEventCollectorRingBuffer(t *testing.T) {
 
 func TestRuleBasedAnalyzer(t *testing.T) {
 	analyzer := ai.NewRuleBasedAnalyzer(0.70)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Switch with OnOff output (client)
 	sw := ai.DeviceSnapshot{
@@ -108,7 +108,7 @@ func TestRuleBasedAnalyzer(t *testing.T) {
 
 func TestLLMAnalyzerHook(t *testing.T) {
 	hook := ai.NewLLMAnalyzerHook("", "")
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sw := ai.DeviceSnapshot{
 		IEEE:           "0x00158D0001",

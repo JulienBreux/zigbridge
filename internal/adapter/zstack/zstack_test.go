@@ -75,7 +75,7 @@ func (m *mockZStackTransport) getWritten() []recordedFrame {
 func TestZStackPermitJoinFraming(t *testing.T) {
 	trans := &mockZStackTransport{}
 	z := New(20, 0x1A62, "00124B0001020304")
-	ctx := context.Background()
+	ctx := t.Context()
 
 	if err := z.Init(ctx, trans); err != nil {
 		t.Fatalf("failed to init adapter: %v", err)
@@ -151,7 +151,7 @@ func TestZStackPermitJoinFraming(t *testing.T) {
 func TestZStackStartupAndStateChange(t *testing.T) {
 	trans := &mockZStackTransport{}
 	z := New(20, 0x1A62, "00124B0001020304")
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_ = z.Init(ctx, trans)
 	_ = z.Start(ctx)
@@ -172,7 +172,7 @@ func TestZStackStartupAndStateChange(t *testing.T) {
 func TestZStackDeviceJoinIndicationAndSendZCL(t *testing.T) {
 	trans := &mockZStackTransport{}
 	z := New(20, 0x1A62, "00124B0001020304")
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_ = z.Init(ctx, trans)
 

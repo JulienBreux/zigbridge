@@ -1,7 +1,6 @@
 package adapter_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/julienbreux/zigbridge/internal/adapter"
@@ -21,7 +20,10 @@ func TestZStackFCS(t *testing.T) {
 
 func TestMockAdapterLifecycleAndBinding(t *testing.T) {
 	mockAdapter := mock.New(20, 0x1A62)
-	ctx := context.Background()
+	t.Cleanup(func() {
+		_ = mockAdapter.Stop()
+	})
+	ctx := t.Context()
 
 	if err := mockAdapter.Start(ctx); err != nil {
 		t.Fatalf("failed to start mock adapter: %v", err)
@@ -63,6 +65,4 @@ func TestMockAdapterLifecycleAndBinding(t *testing.T) {
 	if len(bindings) != 0 {
 		t.Errorf("expected 0 bindings after unbind, got %d", len(bindings))
 	}
-
-	_ = mockAdapter.Stop()
 }
