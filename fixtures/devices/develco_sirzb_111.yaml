@@ -1,0 +1,88 @@
+schema_version: "1.0"
+device:
+    model: SIRZB-111
+    vendor: Develco
+    description: Customizable siren
+    zigbee_models:
+        - SIRZB-111
+    endpoints:
+        - endpoint: 1
+          profile_id: 260
+          device_id: 1027
+          input_clusters:
+            - 0
+            - 1280
+            - 1282
+            - 1
+          output_clusters: []
+    exposes:
+        - type: numeric
+          name: battery
+          property: battery
+          description: Remaining battery in %
+          unit: '%'
+          min: 0
+          max: 100
+          access: 1
+        - type: numeric
+          name: voltage
+          property: voltage
+          description: Reported battery voltage in millivolts
+          unit: mV
+          min: 2000
+          max: 3500
+          access: 1
+        - type: binary
+          name: smoke
+          property: smoke
+          description: Indicates whether the device detected smoke
+          values:
+            - "true"
+            - "false"
+          access: 1
+        - type: binary
+          name: battery_low
+          property: battery_low
+          description: Empty battery indicator
+          values:
+            - "true"
+            - "false"
+          access: 1
+        - type: composite
+          name: warning
+          property: warning
+          description: Trigger siren warning
+          access: 2
+        - type: composite
+          name: squawk
+          property: squawk
+          description: Trigger siren squawk
+          access: 2
+        - type: numeric
+          name: linkquality
+          property: linkquality
+          description: Radio link quality indicator
+          unit: lqi
+          min: 0
+          max: 255
+          access: 1
+    simulations:
+        actions:
+            squawk:
+                cluster: 1282
+                command: 1
+                mqtt_payload:
+                    squawk:
+                        state: system_is_armed
+            warning:
+                cluster: 1282
+                command: 0
+                mqtt_payload:
+                    warning:
+                        level: very_high
+                        mode: burglar
+        telemetry:
+            battery:
+                cluster: 1
+                attribute: 33
+                voltage_attribute: 32

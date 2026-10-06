@@ -1,0 +1,135 @@
+schema_version: "1.0"
+device:
+    model: E2213
+    vendor: IKEA
+    description: SOMRIG shortcut button
+    zigbee_models:
+        - E2213
+    endpoints:
+        - endpoint: 1
+          profile_id: 260
+          device_id: 1025
+          input_clusters:
+            - 0
+            - 1
+          output_clusters:
+            - 6
+            - 8
+    exposes:
+        - type: numeric
+          name: battery
+          property: battery
+          description: Remaining battery in %
+          unit: '%'
+          min: 0
+          max: 100
+          access: 1
+        - type: numeric
+          name: voltage
+          property: voltage
+          description: Reported battery voltage in millivolts
+          unit: mV
+          min: 2000
+          max: 3500
+          access: 1
+        - type: enum
+          name: action
+          property: action
+          description: Triggered action (e.g. a button press)
+          values:
+            - 1_initial_press
+            - 1_long_press
+            - 1_short_release
+            - 1_long_release
+            - 1_double_press
+            - 2_initial_press
+            - 2_long_press
+            - 2_short_release
+            - 2_long_release
+            - 2_double_press
+          access: 1
+        - type: numeric
+          name: linkquality
+          property: linkquality
+          description: Radio link quality indicator
+          unit: lqi
+          min: 0
+          max: 255
+          access: 1
+    simulations:
+        actions:
+            1_double_press:
+                cluster: 6
+                command: 1
+                payload:
+                    - 1
+                mqtt_payload:
+                    action: 1_double_press
+            1_initial_press:
+                cluster: 6
+                command: 2
+                payload:
+                    - 1
+                mqtt_payload:
+                    action: 1_initial_press
+            1_long_press:
+                cluster: 8
+                command: 1
+                payload:
+                    - 1
+                mqtt_payload:
+                    action: 1_long_press
+            1_long_release:
+                cluster: 8
+                command: 3
+                payload:
+                    - 1
+                mqtt_payload:
+                    action: 1_long_release
+            1_short_release:
+                cluster: 6
+                command: 0
+                payload:
+                    - 1
+                mqtt_payload:
+                    action: 1_short_release
+            2_double_press:
+                cluster: 6
+                command: 1
+                payload:
+                    - 2
+                mqtt_payload:
+                    action: 2_double_press
+            2_initial_press:
+                cluster: 6
+                command: 2
+                payload:
+                    - 2
+                mqtt_payload:
+                    action: 2_initial_press
+            2_long_press:
+                cluster: 8
+                command: 1
+                payload:
+                    - 2
+                mqtt_payload:
+                    action: 2_long_press
+            2_long_release:
+                cluster: 8
+                command: 3
+                payload:
+                    - 2
+                mqtt_payload:
+                    action: 2_long_release
+            2_short_release:
+                cluster: 6
+                command: 0
+                payload:
+                    - 2
+                mqtt_payload:
+                    action: 2_short_release
+        telemetry:
+            battery:
+                cluster: 1
+                attribute: 33
+                voltage_attribute: 32

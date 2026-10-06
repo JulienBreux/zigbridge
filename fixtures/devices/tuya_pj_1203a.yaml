@@ -1,0 +1,87 @@
+schema_version: "1.0"
+device:
+    model: PJ-1203A
+    vendor: Tuya
+    description: Bidirectional energy meter with 80A current clamp
+    zigbee_models:
+        - PJ-1203A
+    endpoints:
+        - endpoint: 1
+          profile_id: 260
+          device_id: 81
+          input_clusters:
+            - 0
+            - 3
+            - 4
+            - 5
+            - 1794
+            - 2820
+          output_clusters:
+            - 10
+            - 25
+    exposes:
+        - type: numeric
+          name: voltage
+          property: voltage
+          description: Measured mains AC voltage
+          unit: V
+          access: 1
+        - type: numeric
+          name: power_a
+          property: power_a
+          description: Instantaneous measured power on phase A
+          unit: W
+          access: 1
+        - type: numeric
+          name: power_b
+          property: power_b
+          description: Instantaneous measured power on phase B
+          unit: W
+          access: 1
+        - type: numeric
+          name: power_ab
+          property: power_ab
+          description: Sum of instantaneous measured power
+          unit: W
+          access: 1
+        - type: numeric
+          name: current_a
+          property: current_a
+          description: Instantaneous measured electrical current on phase A
+          unit: A
+          access: 1
+        - type: numeric
+          name: current_b
+          property: current_b
+          description: Instantaneous measured electrical current on phase B
+          unit: A
+          access: 1
+        - type: numeric
+          name: energy_a
+          property: energy_a
+          description: Sum of consumed energy on phase A
+          unit: kWh
+          access: 1
+        - type: numeric
+          name: energy_b
+          property: energy_b
+          description: Sum of consumed energy on phase B
+          unit: kWh
+          access: 1
+        - type: numeric
+          name: linkquality
+          property: linkquality
+          description: Radio link quality indicator
+          unit: lqi
+          min: 0
+          max: 255
+          access: 1
+    simulations:
+        telemetry:
+            electrical:
+                cluster: 2820
+                attribute: 1291
+                voltage_attribute: 1285
+            energy:
+                cluster: 1794
+                attribute: 0

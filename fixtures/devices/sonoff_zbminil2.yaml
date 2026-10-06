@@ -1,0 +1,49 @@
+schema_version: "1.0"
+device:
+    model: ZBMINIL2
+    vendor: SONOFF
+    description: Zigbee smart switch (no neutral)
+    zigbee_models:
+        - ZBMINIL2
+    endpoints:
+        - endpoint: 1
+          profile_id: 260
+          device_id: 256
+          input_clusters:
+            - 0
+            - 6
+          output_clusters: []
+    exposes:
+        - type: binary
+          name: state
+          property: state
+          description: On/off state of this device
+          values:
+            - "ON"
+            - "OFF"
+          access: 7
+        - type: numeric
+          name: linkquality
+          property: linkquality
+          description: Radio link quality indicator
+          unit: lqi
+          min: 0
+          max: 255
+          access: 1
+    simulations:
+        actions:
+            "off":
+                cluster: 6
+                command: 0
+                mqtt_payload:
+                    state: "OFF"
+            "on":
+                cluster: 6
+                command: 1
+                mqtt_payload:
+                    state: "ON"
+            toggle:
+                cluster: 6
+                command: 2
+                mqtt_payload:
+                    state: TOGGLE

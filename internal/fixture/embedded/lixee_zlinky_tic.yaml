@@ -1,0 +1,63 @@
+schema_version: "1.0"
+device:
+    model: ZLinky_TIC
+    vendor: LiXee
+    description: Lixee ZLinky
+    zigbee_models:
+        - ZLinky_TIC
+    endpoints:
+        - endpoint: 1
+          profile_id: 260
+          device_id: 81
+          input_clusters:
+            - 0
+            - 3
+            - 4
+            - 5
+            - 1794
+            - 2820
+          output_clusters:
+            - 10
+            - 25
+    exposes:
+        - type: numeric
+          name: energy
+          property: energy
+          description: Sum of consumed energy
+          unit: kWh
+          access: 1
+        - type: numeric
+          name: current
+          property: current
+          description: Instantaneous measured electrical current
+          unit: A
+          access: 1
+        - type: numeric
+          name: voltage
+          property: voltage
+          description: Measured mains AC voltage
+          unit: V
+          access: 1
+        - type: numeric
+          name: power
+          property: power
+          description: Instantaneous measured power
+          unit: W
+          access: 1
+        - type: numeric
+          name: linkquality
+          property: linkquality
+          description: Radio link quality indicator
+          unit: lqi
+          min: 0
+          max: 255
+          access: 1
+    simulations:
+        telemetry:
+            electrical:
+                cluster: 2820
+                attribute: 1291
+                voltage_attribute: 1285
+            energy:
+                cluster: 1794
+                attribute: 0

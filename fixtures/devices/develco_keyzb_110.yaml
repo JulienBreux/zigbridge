@@ -1,0 +1,117 @@
+schema_version: "1.0"
+device:
+    model: KEYZB-110
+    vendor: Develco
+    description: Keypad
+    zigbee_models:
+        - KEYZB-110
+    endpoints:
+        - endpoint: 1
+          profile_id: 260
+          device_id: 1025
+          input_clusters:
+            - 0
+            - 1280
+            - 1281
+            - 1
+          output_clusters:
+            - 1281
+            - 6
+    exposes:
+        - type: binary
+          name: battery_low
+          property: battery_low
+          description: Empty battery indicator
+          values:
+            - "true"
+            - "false"
+          access: 1
+        - type: binary
+          name: tamper
+          property: tamper
+          description: Indicates whether the device is tampered
+          values:
+            - "true"
+            - "false"
+          access: 1
+        - type: numeric
+          name: battery
+          property: battery
+          description: Remaining battery in %
+          unit: '%'
+          min: 0
+          max: 100
+          access: 1
+        - type: numeric
+          name: voltage
+          property: voltage
+          description: Reported battery voltage in millivolts
+          unit: mV
+          min: 2000
+          max: 3500
+          access: 1
+        - type: enum
+          name: action
+          property: action
+          description: Triggered action (e.g. a button press)
+          values:
+            - disarm
+            - arm_day_zones
+            - arm_night_zones
+            - arm_all_zones
+            - exit_delay
+            - emergency
+          access: 1
+        - type: numeric
+          name: linkquality
+          property: linkquality
+          description: Radio link quality indicator
+          unit: lqi
+          min: 0
+          max: 255
+          access: 1
+    simulations:
+        actions:
+            arm_all_zones:
+                cluster: 1281
+                command: 0
+                payload:
+                    - 3
+                mqtt_payload:
+                    action: arm_all_zones
+            arm_day_zones:
+                cluster: 1281
+                command: 0
+                payload:
+                    - 1
+                mqtt_payload:
+                    action: arm_day_zones
+            arm_night_zones:
+                cluster: 1281
+                command: 0
+                payload:
+                    - 2
+                mqtt_payload:
+                    action: arm_night_zones
+            disarm:
+                cluster: 1281
+                command: 0
+                payload:
+                    - 0
+                mqtt_payload:
+                    action: disarm
+            emergency:
+                cluster: 1281
+                command: 2
+                mqtt_payload:
+                    action: emergency
+            panic:
+                cluster: 1281
+                command: 4
+                mqtt_payload:
+                    action: panic
+        telemetry:
+            battery:
+                cluster: 1
+                attribute: 33
+                voltage_attribute: 32

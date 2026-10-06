@@ -1,0 +1,62 @@
+schema_version: "1.0"
+device:
+    model: SNZB-02D
+    vendor: SONOFF
+    description: Temperature and humidity sensor with screen
+    zigbee_models:
+        - SNZB-02D
+    endpoints:
+        - endpoint: 1
+          profile_id: 260
+          device_id: 0
+          input_clusters:
+            - 0
+            - 1
+            - 1026
+            - 1029
+          output_clusters: []
+    exposes:
+        - type: numeric
+          name: battery
+          property: battery
+          description: Remaining battery in %
+          unit: '%'
+          min: 0
+          max: 100
+          access: 1
+        - type: numeric
+          name: temperature
+          property: temperature
+          description: Measured temperature value
+          unit: °C
+          min: -20
+          max: 60
+          access: 1
+        - type: numeric
+          name: humidity
+          property: humidity
+          description: Measured relative humidity
+          unit: '%'
+          min: 0
+          max: 100
+          access: 1
+        - type: numeric
+          name: linkquality
+          property: linkquality
+          description: Radio link quality indicator
+          unit: lqi
+          min: 0
+          max: 255
+          access: 1
+    simulations:
+        telemetry:
+            battery:
+                cluster: 1
+                attribute: 33
+                voltage_attribute: 32
+            humidity:
+                cluster: 1029
+                attribute: 0
+            temperature:
+                cluster: 1026
+                attribute: 0

@@ -1,0 +1,130 @@
+schema_version: "1.0"
+device:
+    model: E2001/E2002/E2313
+    vendor: IKEA
+    description: STYRBAR remote control
+    zigbee_models:
+        - E2001/E2002/E2313
+    endpoints:
+        - endpoint: 1
+          profile_id: 260
+          device_id: 1025
+          input_clusters:
+            - 0
+            - 1
+          output_clusters:
+            - 6
+            - 8
+            - 5
+    exposes:
+        - type: numeric
+          name: battery
+          property: battery
+          description: Remaining battery in %
+          unit: '%'
+          min: 0
+          max: 100
+          access: 1
+        - type: enum
+          name: action
+          property: action
+          description: Triggered action (e.g. a button press)
+          values:
+            - "on"
+            - "off"
+            - brightness_move_up
+            - brightness_move_down
+            - brightness_stop
+            - arrow_left_click
+            - arrow_left_hold
+            - arrow_left_release
+            - arrow_right_click
+            - arrow_right_hold
+            - arrow_right_release
+          access: 1
+        - type: numeric
+          name: linkquality
+          property: linkquality
+          description: Radio link quality indicator
+          unit: lqi
+          min: 0
+          max: 255
+          access: 1
+    simulations:
+        actions:
+            arrow_left_click:
+                cluster: 5
+                command: 7
+                payload:
+                    - 1
+                mqtt_payload:
+                    action: arrow_left_click
+            arrow_left_hold:
+                cluster: 5
+                command: 8
+                payload:
+                    - 1
+                mqtt_payload:
+                    action: arrow_left_hold
+            arrow_left_release:
+                cluster: 5
+                command: 9
+                payload:
+                    - 1
+                mqtt_payload:
+                    action: arrow_left_release
+            arrow_right_click:
+                cluster: 5
+                command: 7
+                payload:
+                    - 0
+                mqtt_payload:
+                    action: arrow_right_click
+            arrow_right_hold:
+                cluster: 5
+                command: 8
+                payload:
+                    - 0
+                mqtt_payload:
+                    action: arrow_right_hold
+            arrow_right_release:
+                cluster: 5
+                command: 9
+                payload:
+                    - 0
+                mqtt_payload:
+                    action: arrow_right_release
+            brightness_move_down:
+                cluster: 8
+                command: 1
+                payload:
+                    - 1
+                mqtt_payload:
+                    action: brightness_move_down
+            brightness_move_up:
+                cluster: 8
+                command: 1
+                payload:
+                    - 0
+                mqtt_payload:
+                    action: brightness_move_up
+            brightness_stop:
+                cluster: 8
+                command: 3
+                mqtt_payload:
+                    action: brightness_stop
+            "off":
+                cluster: 6
+                command: 0
+                mqtt_payload:
+                    action: "off"
+            "on":
+                cluster: 6
+                command: 1
+                mqtt_payload:
+                    action: "on"
+        telemetry:
+            battery:
+                cluster: 1
+                attribute: 33
+                voltage_attribute: 32

@@ -1,0 +1,87 @@
+schema_version: "1.0"
+device:
+    model: MCCGQ11LM
+    vendor: Aqara
+    description: Door and window sensor
+    zigbee_models:
+        - MCCGQ11LM
+    endpoints:
+        - endpoint: 1
+          profile_id: 260
+          device_id: 1026
+          input_clusters:
+            - 0
+            - 1280
+            - 1
+            - 1026
+          output_clusters: []
+    exposes:
+        - type: numeric
+          name: battery
+          property: battery
+          description: Remaining battery in %
+          unit: '%'
+          min: 0
+          max: 100
+          access: 1
+        - type: binary
+          name: contact
+          property: contact
+          description: Indicates whether the contact is closed (true) or open (false)
+          values:
+            - "true"
+            - "false"
+          access: 1
+        - type: numeric
+          name: device_temperature
+          property: device_temperature
+          description: Measured temperature value
+          unit: °C
+          min: -20
+          max: 60
+          access: 1
+        - type: numeric
+          name: voltage
+          property: voltage
+          description: Reported battery voltage in millivolts
+          unit: mV
+          min: 2000
+          max: 3500
+          access: 1
+        - type: numeric
+          name: linkquality
+          property: linkquality
+          description: Radio link quality indicator
+          unit: lqi
+          min: 0
+          max: 255
+          access: 1
+    simulations:
+        actions:
+            closed:
+                cluster: 1280
+                command: 0
+                payload:
+                    - 0
+                    - 0
+                mqtt_payload:
+                    contact: true
+            open:
+                cluster: 1280
+                command: 0
+                payload:
+                    - 1
+                    - 0
+                mqtt_payload:
+                    contact: false
+        telemetry:
+            battery:
+                cluster: 1
+                attribute: 33
+                voltage_attribute: 32
+            contact:
+                cluster: 1280
+                attribute: 2
+            temperature:
+                cluster: 1026
+                attribute: 0

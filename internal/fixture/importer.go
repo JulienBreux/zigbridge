@@ -369,9 +369,26 @@ func extractRegex(src, pattern string) string {
 }
 
 func extractActionValues(htmlContent string) []string {
-	reSection := regexp.MustCompile(`(?i)(?:<h3>\s*action\b|<h[23][^>]*id="action")[^<]*(?:<[^>]+>)*([\s\S]*?)(?:<h[23]|\z)`)
-	m := reSection.FindStringSubmatch(htmlContent)
+	// 1. Prioritize Action enum section explicitly listing "The possible values are:"
+	rePossible := regexp.MustCompile(`(?i)(?:id="action-enum"|id="action")[^>]*>[\s\S]*?The possible values are:\s*([\s\S]*?)</p>`)
+	m := rePossible.FindStringSubmatch(htmlContent)
 	var values []string
+	if len(m) > 1 {
+		reCode := regexp.MustCompile(`<code>([^<]+)</code>`)
+		for _, cm := range reCode.FindAllStringSubmatch(m[1], -1) {
+			val := strings.TrimSpace(cm[1])
+			if val != "" && !slices.Contains(values, val) && !strings.Contains(val, " ") && len(val) < 40 {
+				values = append(values, val)
+			}
+		}
+	}
+	if len(values) > 0 {
+		return values
+	}
+
+	// 2. Fallback to Action enum header or section
+	reSection := regexp.MustCompile(`(?i)(?:<h3>\s*action\b|<h[23][^>]*id="action-enum")[^<]*(?:<[^>]+>)*([\s\S]*?)(?:<h[23]|\z)`)
+	m = reSection.FindStringSubmatch(htmlContent)
 	if len(m) > 1 {
 		sectionText := m[1]
 		reCode := regexp.MustCompile(`<code>([^<]+)</code>`)
@@ -400,6 +417,7 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 		hasBattery := strings.Contains(rawLower, "battery")
 		isMains := !hasBattery && (strings.Contains(rawLower, "power") || strings.Contains(rawLower, "energy") ||
 			strings.Contains(rawLower, "current") || strings.Contains(rawLower, "plug") ||
+			strings.Contains(rawLower, "urms") || strings.Contains(rawLower, "sinsts") ||
 			(strings.Contains(rawLower, "switch") && !strings.Contains(rawLower, "wireless") && !strings.Contains(rawLower, "button")))
 
 		actionValues := extractActionValues(htmlContent)
@@ -418,7 +436,7 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 						Access:      7,
 					})
 				}
-			case "power":
+			case "power", "sinsts", "apparent_power":
 				if !hasProperty(exposes, "power") {
 					exposes = append(exposes, ExposeDef{
 						Type:        "numeric",
@@ -462,7 +480,7 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 						Access:      1,
 					})
 				}
-			case "current":
+			case "current", "irms1":
 				if !hasProperty(exposes, "current") {
 					exposes = append(exposes, ExposeDef{
 						Type:        "numeric",
@@ -495,7 +513,7 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 						Access:      1,
 					})
 				}
-			case "voltage":
+			case "voltage", "urms1":
 				if !hasProperty(exposes, "voltage") {
 					if isMains {
 						exposes = append(exposes, ExposeDef{
@@ -520,7 +538,7 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 						})
 					}
 				}
-			case "energy":
+			case "energy", "east", "base":
 				if !hasProperty(exposes, "energy") {
 					exposes = append(exposes, ExposeDef{
 						Type:        "numeric",
