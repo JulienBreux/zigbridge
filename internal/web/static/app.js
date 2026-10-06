@@ -53,9 +53,6 @@ function initMode() {
     if (statusLabel) {
       statusLabel.textContent = 'OFF';
     }
-    // Close diagnostics drawer when reverting to simple mode
-    const drawer = document.getElementById('drawer-diagnostics');
-    if (drawer) drawer.style.display = 'none';
   }
 }
 
@@ -63,14 +60,6 @@ function toggleAdvancedMode() {
   currentMode = (currentMode === 'simple') ? 'advanced' : 'simple';
   localStorage.setItem('zigbridge_mode', currentMode);
   initMode();
-}
-
-// Diagnostics Drawer Toggle
-function toggleDiagnosticsDrawer() {
-  const drawer = document.getElementById('drawer-diagnostics');
-  if (!drawer) return;
-  const isHidden = (drawer.style.display === 'none' || drawer.style.display === '');
-  drawer.style.display = isHidden ? 'block' : 'none';
 }
 
 // ==============================================================================
@@ -108,6 +97,7 @@ function switchTab(tabId) {
     loadDevices();
   }
   if (tabId === 'bindings') loadBindings();
+  if (tabId === 'diagnostics') loadStatus();
   if (tabId === 'simulation') loadSimulationLab();
 }
 
@@ -168,23 +158,23 @@ async function loadStatus() {
       }
     }
 
-    // 3. Diagnostics Drawer Telemetry
+    // 3. Diagnostics Tab Telemetry
     if (document.getElementById('diag-coord-type')) {
       document.getElementById('diag-coord-type').textContent = data.coordinator?.type || 'Coordinator';
       document.getElementById('diag-coord-model').textContent = data.coordinator?.version || 'Zigbee 3.0';
       document.getElementById('diag-coord-ieee').textContent = data.coordinator?.ieee || '--:--:--:--:--:--:--:--';
-      document.getElementById('diag-channel').textContent = data.coordinator?.channel || '--';
+      document.getElementById('diag-channel').textContent = data.coordinator?.channel != null ? data.coordinator.channel : '--';
       document.getElementById('diag-panid').textContent = data.coordinator?.pan_id ? `0x${data.coordinator.pan_id.toString(16).toUpperCase()}` : '--';
       document.getElementById('diag-ext-panid').textContent = `Ext PAN: ${data.coordinator?.ext_pan_id || '--'}`;
 
       const transBadge = document.getElementById('diag-transport-badge');
       const transStatus = document.getElementById('diag-transport-status');
       if (data.connected) {
-        transBadge.className = 'badge badge-connected';
-        transStatus.textContent = 'Active Link';
+        if (transBadge) transBadge.className = 'badge badge-connected';
+        if (transStatus) transStatus.textContent = 'Active Link';
       } else {
-        transBadge.className = 'badge badge-disconnected';
-        transStatus.textContent = data.transport_status || 'Disconnected';
+        if (transBadge) transBadge.className = 'badge badge-disconnected';
+        if (transStatus) transStatus.textContent = data.transport_status || 'Disconnected';
       }
 
       // Formatting Uptime
@@ -192,8 +182,51 @@ async function loadStatus() {
       const h = Math.floor(sec / 3600);
       const m = Math.floor((sec % 3600) / 60);
       const s = sec % 60;
-      document.getElementById('diag-uptime').textContent = h > 0 ? `${h}h ${m}m ${s}s` : (m > 0 ? `${m}m ${s}s` : `${s}s`);
-      document.getElementById('diag-mesh-counts').textContent = `${data.device_count || 0} Devices · ${data.binding_count || 0} Bindings`;
+      const uptimeStr = h > 0 ? `${h}h ${m}m ${s}s` : (m > 0 ? `${m}m ${s}s` : `${s}s`);
+      if (document.getElementById('diag-uptime')) document.getElementById('diag-uptime').textContent = uptimeStr;
+      if (document.getElementById('diag-mesh-counts')) document.getElementById('diag-mesh-counts').textContent = `${data.device_count || 0} Devices · ${data.binding_count || 0} Bindings`;
+
+      // Detailed Technical Breakdown Fields
+      const setEl = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      };
+
+      setEl('diag-detail-proto', data.coordinator?.type || '--');
+      setEl('diag-detail-version', data.coordinator?.version || '--');
+      setEl('diag-detail-ieee', data.coordinator?.ieee || '--');
+      setEl('diag-detail-channel', data.coordinator?.channel ? `Channel ${data.coordinator.channel} (2.4 GHz)` : '--');
+      setEl('diag-detail-panid', data.coordinator?.pan_id ? `0x${data.coordinator.pan_id.toString(16).toUpperCase()}` : '--');
+      setEl('diag-detail-extpanid', data.coordinator?.ext_pan_id || '--');
+
+      const coordStatusBadge = document.getElementById('diag-detail-status-badge');
+      if (coordStatusBadge) {
+        if (isOnline) {
+          coordStatusBadge.className = 'badge badge-connected';
+          coordStatusBadge.textContent = 'Ready';
+        } else {
+          coordStatusBadge.className = 'badge badge-disconnected';
+          coordStatusBadge.textContent = 'Offline';
+        }
+      }
+
+      const serviceStatusBadge = document.getElementById('diag-detail-service-badge');
+      if (serviceStatusBadge) {
+        if (data.connected) {
+          serviceStatusBadge.className = 'badge badge-connected';
+          serviceStatusBadge.textContent = 'Active';
+        } else {
+          serviceStatusBadge.className = 'badge badge-disconnected';
+          serviceStatusBadge.textContent = 'Disconnected';
+        }
+      }
+
+      setEl('diag-detail-transport', data.connected ? `Connected (${data.transport_status || 'Active'})` : (data.transport_status || 'Disconnected'));
+      setEl('diag-detail-mqtt', data.mqtt_connected ? 'Connected' : 'Offline / Disabled');
+      setEl('diag-detail-appversion', data.version ? (data.version.startsWith('v') ? data.version : `v${data.version}`) : 'dev');
+      setEl('diag-detail-commit', data.commit || 'unknown');
+      setEl('diag-detail-uptime', uptimeStr);
+      setEl('diag-detail-permitjoin', (data.permit_join_remaining > 0) ? `Enabled (${data.permit_join_remaining}s remaining)` : 'Disabled');
     }
 
     // Update Counts in Nav Tabs

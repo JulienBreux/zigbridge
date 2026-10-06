@@ -58,7 +58,7 @@ Written in pure, idiomatic Go with zero CGO dependencies. Runs comfortably on lo
 ### 👥 Dual-Mode Web Dashboard (Offline & CDN-Free)
 A clean, embedded dashboard served straight from the binary with zero external CDN dependencies:
 - **Simple Mode (Default)**: Friendly names, device category icons (💡 Light, 🔘 Switch, 🏃 Sensor, 🔌 Plug), qualitative signal ratings (`Excellent`, `Good`, `Fair`, `Poor`), and a human-readable **Activity** feed.
-- **Advanced Mode**: 1-click toggle revealing IEEE 64-bit addresses, NWK IDs, cluster hex codes, live ZCL frame inspector, and a slide-down **Diagnostics Drawer**.
+- **Advanced Mode**: 1-click toggle revealing IEEE 64-bit addresses, NWK IDs, cluster hex codes, live ZCL frame inspector, and full-page **Diagnostics**.
 
 ### 🏡 Seamless Home Assistant Auto-Discovery
 Paired devices automatically announce their capabilities via standard Home Assistant MQTT discovery topics. Sensors, switches, lights, and bridge health entities appear in your Home Assistant dashboard instantly.
@@ -115,7 +115,7 @@ Comprehensive guides, hardware setups, and API references are located in the [`d
 - 📖 [**Documentation Index**](docs/index.md) - Overview and quick links.
 - 🛠️ [**Coordinator Setup Guide**](docs/coordinators.md) - Ethernet/Wi-Fi (SLZB-06) and USB serial dongle setup.
 - ⚡ [**Direct Binding Deep Dive**](docs/direct-binding.md) - Hardware bindings, optimistic binding, and cluster reference.
-- 🖥️ [**Web Management Dashboard**](docs/web-dashboard.md) - Simple Mode vs Advanced Mode and Diagnostics Drawer.
+- 🖥️ [**Web Management Dashboard**](docs/web-dashboard.md) - Simple Mode vs Advanced Mode, Activity stream, and Diagnostics tab.
 - 🔌 [**REST & WebSocket API Reference**](docs/api.md) - HTTP endpoints and real-time WebSocket event stream.
 - ⚙️ [**Configuration Reference**](docs/configuration.md) - Complete line-by-line `config.yaml` options and defaults.
 - 🏗️ [**Architecture & Internals**](docs/architecture.md) - Concurrency model, non-blocking event bus, and `sync.Pool`.

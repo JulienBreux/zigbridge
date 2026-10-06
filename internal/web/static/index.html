@@ -25,11 +25,6 @@
         <span id="mqtt-status-text">MQTT</span>
       </div>
 
-      <!-- Diagnostics Drawer Button (Shows in Advanced Mode or click to inspect) -->
-      <button id="btn-diagnostics" class="btn btn-sm btn-subtle only-advanced" onclick="toggleDiagnosticsDrawer()" title="View radio coordinator and network diagnostics">
-        <span>📊 Diagnostics</span>
-      </button>
-
       <!-- Advance Mode Switch -->
       <button id="toggle-advanced-mode" class="mode-toggle-btn" onclick="toggleAdvancedMode()" title="Toggle between Simple and Advance modes">
         <span id="mode-toggle-status" class="mode-badge">OFF</span>
@@ -37,59 +32,6 @@
       </button>
     </div>
   </header>
-
-  <!-- DIAGNOSTICS DRAWER (Expandable Coordinator & Architecture Telemetry) -->
-  <div id="drawer-diagnostics" class="diagnostics-drawer" style="display:none;">
-    <div class="drawer-content">
-      <div class="drawer-header">
-        <div>
-          <h3 class="drawer-title">Coordinator & Network Architecture</h3>
-          <p class="drawer-subtitle">Hardware coprocessor telemetry and Zigbee mesh parameters</p>
-        </div>
-        <button class="btn btn-sm" onclick="toggleDiagnosticsDrawer()">✕ Close</button>
-      </div>
-
-      <div class="grid grid-cols-4" style="margin-top: 12px;">
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Coordinator Adapter</span>
-            <span id="diag-coord-type" class="badge badge-purple">TI Z-Stack</span>
-          </div>
-          <div id="diag-coord-model" class="metric-value" style="font-size: 16px;">CC2652P</div>
-          <div id="diag-coord-ieee" class="metric-sub mono">--:--:--:--:--:--:--:--</div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Zigbee Radio</span>
-            <span class="badge badge-info">2.4 GHz</span>
-          </div>
-          <div class="metric-value" style="font-size: 16px;">
-            CH <span id="diag-channel">--</span> | PAN <span id="diag-panid">--</span>
-          </div>
-          <div id="diag-ext-panid" class="metric-sub mono">Ext PAN: --</div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Transport Link</span>
-            <span id="diag-transport-badge" class="badge badge-connected">TCP Socket</span>
-          </div>
-          <div id="diag-transport-status" class="metric-value" style="font-size: 16px;">Connected</div>
-          <div class="metric-sub">NVRAM: <strong style="color:var(--accent-green);">Preserved</strong></div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Bridge Uptime</span>
-            <span class="badge badge-connected">Operational</span>
-          </div>
-          <div id="diag-uptime" class="metric-value" style="font-size: 16px;">0s</div>
-          <div id="diag-mesh-counts" class="metric-sub">0 Devices · 0 Bindings</div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- NAVIGATION TABS -->
   <nav class="tabs">
@@ -104,6 +46,9 @@
     </button>
     <button class="tab-btn" data-tab="events" onclick="switchTab('events')">
       Activity
+    </button>
+    <button class="tab-btn" data-tab="diagnostics" onclick="switchTab('diagnostics')">
+      Diagnostics
     </button>
     <button id="tab-btn-simulation" class="tab-btn" data-tab="simulation" onclick="switchTab('simulation')" style="display:none;">
       🧪 Simulation Lab <span id="nav-sim-count" class="tab-count">0</span>
@@ -400,6 +345,133 @@
         </div>
         <div id="event-log-console" class="log-console">
           <!-- Raw logs injected here -->
+        </div>
+      </div>
+    </section>
+
+    <!-- DIAGNOSTICS TAB -->
+    <section id="tab-diagnostics" class="tab-pane">
+      <div class="actions-bar">
+        <div>
+          <h2 style="font-size: 16px; font-weight: 600;">System Diagnostics</h2>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-top: 2px;">
+            Coordinator hardware telemetry, Zigbee radio parameters, and bridge transport status.
+          </p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sm" onclick="loadStatus()">Refresh Diagnostics</button>
+        </div>
+      </div>
+
+      <!-- Overview Metric Cards -->
+      <div class="grid grid-cols-4" style="margin-bottom: 24px;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Coordinator Adapter</span>
+            <span id="diag-coord-type" class="badge badge-purple">Coordinator</span>
+          </div>
+          <div id="diag-coord-model" class="metric-value" style="font-size: 18px; margin-top: 4px;">--</div>
+          <div id="diag-coord-ieee" class="metric-sub mono">--:--:--:--:--:--:--:--</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Zigbee Radio</span>
+            <span class="badge badge-info">2.4 GHz</span>
+          </div>
+          <div class="metric-value" style="font-size: 18px; margin-top: 4px;">
+            CH <span id="diag-channel">--</span> | PAN <span id="diag-panid">--</span>
+          </div>
+          <div id="diag-ext-panid" class="metric-sub mono">Ext PAN: --</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Transport Link</span>
+            <span id="diag-transport-badge" class="badge badge-connected">TCP Socket</span>
+          </div>
+          <div id="diag-transport-status" class="metric-value" style="font-size: 18px; margin-top: 4px;">Connected</div>
+          <div class="metric-sub">NVRAM: <strong style="color:var(--accent-green);">Preserved</strong></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Bridge Uptime</span>
+            <span class="badge badge-connected">Operational</span>
+          </div>
+          <div id="diag-uptime" class="metric-value" style="font-size: 18px; margin-top: 4px;">0s</div>
+          <div id="diag-mesh-counts" class="metric-sub">0 Devices · 0 Bindings</div>
+        </div>
+      </div>
+
+      <!-- Detailed Technical Breakdown -->
+      <div class="grid grid-cols-2" style="gap: 16px;">
+        <!-- Coordinator & Radio Hardware -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Coordinator &amp; Radio Telemetry</span>
+            <span id="diag-detail-status-badge" class="badge badge-connected">Ready</span>
+          </div>
+          <div class="about-field-list">
+            <div class="about-field-item">
+              <span class="about-field-label">Adapter Type / Driver</span>
+              <span id="diag-detail-proto" class="about-field-value">--</span>
+            </div>
+            <div class="about-field-item">
+              <span class="about-field-label">Firmware / Version</span>
+              <span id="diag-detail-version" class="about-field-value">--</span>
+            </div>
+            <div class="about-field-item">
+              <span class="about-field-label">Coordinator IEEE (EUI-64)</span>
+              <span id="diag-detail-ieee" class="about-field-value mono">--</span>
+            </div>
+            <div class="about-field-item">
+              <span class="about-field-label">Radio Channel</span>
+              <span id="diag-detail-channel" class="about-field-value">--</span>
+            </div>
+            <div class="about-field-item">
+              <span class="about-field-label">16-bit PAN Identifier</span>
+              <span id="diag-detail-panid" class="about-field-value mono">--</span>
+            </div>
+            <div class="about-field-item">
+              <span class="about-field-label">Extended PAN Identifier</span>
+              <span id="diag-detail-extpanid" class="about-field-value mono">--</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bridge & Host Connectivity -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Host &amp; Service Connectivity</span>
+            <span id="diag-detail-service-badge" class="badge badge-connected">Active</span>
+          </div>
+          <div class="about-field-list">
+            <div class="about-field-item">
+              <span class="about-field-label">Physical Transport</span>
+              <span id="diag-detail-transport" class="about-field-value">--</span>
+            </div>
+            <div class="about-field-item">
+              <span class="about-field-label">MQTT Connection</span>
+              <span id="diag-detail-mqtt" class="about-field-value">--</span>
+            </div>
+            <div class="about-field-item">
+              <span class="about-field-label">Zigbridge Version</span>
+              <span id="diag-detail-appversion" class="about-field-value mono">--</span>
+            </div>
+            <div class="about-field-item">
+              <span class="about-field-label">Git Commit</span>
+              <span id="diag-detail-commit" class="about-field-value mono">--</span>
+            </div>
+            <div class="about-field-item">
+              <span class="about-field-label">Bridge System Uptime</span>
+              <span id="diag-detail-uptime" class="about-field-value">--</span>
+            </div>
+            <div class="about-field-item">
+              <span class="about-field-label">Permit Join Status</span>
+              <span id="diag-detail-permitjoin" class="about-field-value">--</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
