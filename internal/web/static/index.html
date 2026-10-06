@@ -109,7 +109,7 @@
       Smart Suggestions <span id="nav-rec-count" class="tab-count">0</span>
     </button>
     <button class="tab-btn" data-tab="events" onclick="switchTab('events')">
-      Activity <span id="ws-status-badge" class="tab-count" style="color:var(--accent-green);">● Live</span>
+      Activity
     </button>
     <button id="tab-btn-simulation" class="tab-btn" data-tab="simulation" onclick="switchTab('simulation')" style="display:none;">
       🧪 Simulation Lab <span id="nav-sim-count" class="tab-count">0</span>
@@ -130,7 +130,6 @@
     <section id="tab-devices" class="tab-pane active">
       <div class="actions-bar">
         <input type="text" id="device-search" class="search-input" placeholder="Search devices by name, model, or room..." oninput="filterDevices()">
-        <button class="btn btn-primary" onclick="loadDevices()">Refresh Devices</button>
       </div>
 
       <div class="table-container">

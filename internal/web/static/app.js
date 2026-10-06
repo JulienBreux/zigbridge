@@ -1636,16 +1636,11 @@ async function applyRecommendation(recId) {
 function connectWebSocket() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${protocol}//${window.location.host}/api/events`;
-  const wsBadge = document.getElementById('ws-status-badge');
 
   try {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      if (wsBadge) {
-        wsBadge.textContent = '● Live';
-        wsBadge.style.color = 'var(--accent-green)';
-      }
       appendActivityItem('system', 'System Online', 'Connected to Zigbridge live activity stream.');
     };
 
@@ -1659,10 +1654,6 @@ function connectWebSocket() {
     };
 
     ws.onclose = () => {
-      if (wsBadge) {
-        wsBadge.textContent = '○ Reconnecting';
-        wsBadge.style.color = 'var(--accent-orange)';
-      }
       setTimeout(connectWebSocket, 3000);
     };
 
