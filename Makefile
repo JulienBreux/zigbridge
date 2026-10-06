@@ -5,7 +5,7 @@
 SHELL := /bin/bash
 BIN_DIR := bin
 BINARY_NAME := zigbridge
-MAIN_SRC := cmd/zigbridge/main.go
+MAIN_SRC := ./cmd/zigbridge
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "1.0.0")
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
