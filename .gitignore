@@ -1,0 +1,31 @@
+# Binaries and build artifacts
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test and coverage output
+coverage/
+*.out
+*.test
+coverage.html
+
+# IDE & OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local temporary and user configs containing credentials
+config.yaml
+*.local.yaml
+mock_config.yaml
+
+# Local persistent runtime state and user configuration
+data/
+
+# Local agent task scratchpads
+tasks/
