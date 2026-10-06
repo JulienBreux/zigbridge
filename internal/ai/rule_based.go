@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/julienbreux/zigbridge/internal/zcl"
@@ -49,13 +50,7 @@ func (r *RuleBasedAnalyzer) Analyze(ctx context.Context, topology NetworkTopolog
 				}
 
 				// Check if destination supports the cluster as input (server)
-				hasInput := false
-				for _, inCluster := range dst.InputClusters {
-					if inCluster == cluster {
-						hasInput = true
-						break
-					}
-				}
+				hasInput := slices.Contains(dst.InputClusters, cluster)
 
 				if !hasInput {
 					continue
@@ -68,10 +63,7 @@ func (r *RuleBasedAnalyzer) Analyze(ctx context.Context, topology NetworkTopolog
 
 				// Check event history for correlation
 				correlationScore := r.evaluateCorrelation(src.IEEE, dst.IEEE, events)
-				confidence := 0.75 + (correlationScore * 0.20)
-				if confidence > 0.98 {
-					confidence = 0.98
-				}
+				confidence := min(0.75+(correlationScore*0.20), 0.98)
 
 				if confidence >= r.MinConfidence {
 					recID := fmt.Sprintf("rec-bind-%s-%s-%04X", src.IEEE, dst.IEEE, uint16(cluster))
@@ -113,7 +105,7 @@ func (r *RuleBasedAnalyzer) evaluateCorrelation(srcIEEE, dstIEEE string, events 
 	}
 
 	correlations := 0
-	for i := 0; i < len(events)-1; i++ {
+	for i := range len(events) - 1 {
 		e1 := events[i]
 		if e1.IEEE != srcIEEE {
 			continue
@@ -132,10 +124,7 @@ func (r *RuleBasedAnalyzer) evaluateCorrelation(srcIEEE, dstIEEE string, events 
 		}
 	}
 
-	if correlations > 5 {
-		return 1.0
-	}
-	return float64(correlations) / 5.0
+	return min(float64(correlations)/5.0, 1.0)
 }
 
 func (r *RuleBasedAnalyzer) detectGroupedScene(topology NetworkTopology, events []DeviceEvent) *Recommendation {
@@ -146,11 +135,8 @@ func (r *RuleBasedAnalyzer) detectGroupedScene(topology NetworkTopology, events 
 	// Suggest a Good Night / All Off automated scene if multiple lights exist
 	var lightIEEEs []string
 	for _, dev := range topology.Devices {
-		for _, in := range dev.InputClusters {
-			if in == zcl.ClusterOnOff {
-				lightIEEEs = append(lightIEEEs, dev.IEEE)
-				break
-			}
+		if slices.Contains(dev.InputClusters, zcl.ClusterOnOff) {
+			lightIEEEs = append(lightIEEEs, dev.IEEE)
 		}
 	}
 
@@ -161,7 +147,7 @@ func (r *RuleBasedAnalyzer) detectGroupedScene(topology NetworkTopology, events 
 				TargetIEEE:     ieee,
 				TargetEndpoint: 1,
 				Command:        "turn_off",
-				Parameters:     map[string]interface{}{"state": "OFF"},
+				Parameters:     map[string]any{"state": "OFF"},
 			})
 		}
 

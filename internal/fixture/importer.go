@@ -1,6 +1,7 @@
 package fixture
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -122,24 +124,20 @@ func (imp *Importer) ImportFromHTML(htmlContent, sourceURL string) (*DeviceDefin
 			}
 		}
 	}
-	if vendor == "" {
-		vendor = "Generic"
-	}
+	vendor = cmp.Or(vendor, "Generic")
 
 	// 3. Extract Description
 	description := extractRegex(htmlContent, `(?i)<tr>\s*<td>\s*Description\s*</td>\s*<td>\s*([^<]+?)\s*</td>`)
 	if description == "" {
 		description = extractRegex(htmlContent, `(?i)<meta\s+name=["']description["']\s+content=["']([^"']+)["']`)
 	}
-	if description == "" {
-		description = fmt.Sprintf("%s %s", vendor, model)
-	}
+	description = cmp.Or(description, fmt.Sprintf("%s %s", vendor, model))
 
 	// 4. Extract Zigbee Models
 	var zigbeeModels []string
 	zmRaw := extractRegex(htmlContent, `(?i)<tr>\s*<td>\s*Zigbee\s+Model[s]?\s*</td>\s*<td>\s*([^<]+?)\s*</td>`)
 	if zmRaw != "" {
-		for _, m := range strings.Split(zmRaw, ",") {
+		for m := range strings.SplitSeq(zmRaw, ",") {
 			cleaned := strings.TrimSpace(m)
 			if cleaned != "" {
 				zigbeeModels = append(zigbeeModels, cleaned)
@@ -150,13 +148,7 @@ func (imp *Importer) ImportFromHTML(htmlContent, sourceURL string) (*DeviceDefin
 		zigbeeModels = append(zigbeeModels, model)
 	}
 	if model == "A7Z" {
-		hasTS011F := false
-		for _, zm := range zigbeeModels {
-			if zm == "TS011F" {
-				hasTS011F = true
-				break
-			}
-		}
+		hasTS011F := slices.Contains(zigbeeModels, "TS011F")
 		if !hasTS011F {
 			zigbeeModels = append(zigbeeModels, "TS011F")
 		}
@@ -226,13 +218,7 @@ func (imp *Importer) ImportFromJSON(data []byte) (*DeviceDefinition, error) {
 		zigbeeModels = append(zigbeeModels, input.Model)
 	}
 	if input.Model == "A7Z" {
-		hasTS011F := false
-		for _, zm := range zigbeeModels {
-			if zm == "TS011F" {
-				hasTS011F = true
-				break
-			}
-		}
+		hasTS011F := slices.Contains(zigbeeModels, "TS011F")
 		if !hasTS011F {
 			zigbeeModels = append(zigbeeModels, "TS011F")
 		}
@@ -241,7 +227,7 @@ func (imp *Importer) ImportFromJSON(data []byte) (*DeviceDefinition, error) {
 	exposes := input.Exposes
 	if len(exposes) == 0 && input.Supports != "" {
 		// Parse from comma-separated supports string (e.g., "action, battery, voltage")
-		for _, item := range strings.Split(input.Supports, ",") {
+		for item := range strings.SplitSeq(input.Supports, ",") {
 			prop := strings.TrimSpace(item)
 			switch prop {
 			case "action":
@@ -373,9 +359,9 @@ func extractRegex(src, pattern string) string {
 	re := regexp.MustCompile(pattern)
 	matches := re.FindStringSubmatch(src)
 	if len(matches) > 1 {
-		for i := 1; i < len(matches); i++ {
-			if matches[i] != "" {
-				return strings.TrimSpace(matches[i])
+		for _, m := range matches[1:] {
+			if m != "" {
+				return strings.TrimSpace(m)
 			}
 		}
 	}
@@ -780,17 +766,17 @@ func inferArchitecture(exposes []ExposeDef) ([]EndpointDef, SimulationDef) {
 		actions["toggle"] = ActionSim{
 			Cluster:     0x0006,
 			Command:     0x02,
-			MQTTPayload: map[string]interface{}{"state": "TOGGLE"},
+			MQTTPayload: map[string]any{"state": "TOGGLE"},
 		}
 		actions["on"] = ActionSim{
 			Cluster:     0x0006,
 			Command:     0x01,
-			MQTTPayload: map[string]interface{}{"state": "ON"},
+			MQTTPayload: map[string]any{"state": "ON"},
 		}
 		actions["off"] = ActionSim{
 			Cluster:     0x0006,
 			Command:     0x00,
-			MQTTPayload: map[string]interface{}{"state": "OFF"},
+			MQTTPayload: map[string]any{"state": "OFF"},
 		}
 	}
 
@@ -802,17 +788,17 @@ func inferArchitecture(exposes []ExposeDef) ([]EndpointDef, SimulationDef) {
 			actions["single"] = ActionSim{
 				Cluster:     0x0006,
 				Command:     0x02, // Toggle
-				MQTTPayload: map[string]interface{}{"action": "single"},
+				MQTTPayload: map[string]any{"action": "single"},
 			}
 			actions["double"] = ActionSim{
 				Cluster:     0x0006,
 				Command:     0x01, // On
-				MQTTPayload: map[string]interface{}{"action": "double"},
+				MQTTPayload: map[string]any{"action": "double"},
 			}
 			actions["long"] = ActionSim{
 				Cluster:     0x0006,
 				Command:     0x00, // Off
-				MQTTPayload: map[string]interface{}{"action": "long"},
+				MQTTPayload: map[string]any{"action": "long"},
 			}
 
 		case "battery", "voltage":

@@ -2,6 +2,8 @@ package mock
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -101,15 +103,9 @@ func (m *MockAdapter) Bind(ctx context.Context, req adapter.BindRequest) error {
 func (m *MockAdapter) Unbind(ctx context.Context, req adapter.BindRequest) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	filtered := make([]adapter.BindRequest, 0, len(m.bindings))
-	for _, b := range m.bindings {
-		if b.SrcIEEE == req.SrcIEEE && b.SrcEndpoint == req.SrcEndpoint &&
-			b.ClusterID == req.ClusterID && b.DstIEEE == req.DstIEEE && b.DstEndpoint == req.DstEndpoint {
-			continue
-		}
-		filtered = append(filtered, b)
-	}
-	m.bindings = filtered
+	m.bindings = slices.DeleteFunc(m.bindings, func(b adapter.BindRequest) bool {
+		return b == req
+	})
 	return nil
 }
 
@@ -178,11 +174,7 @@ func (m *MockAdapter) SpawnVirtualDevice(def *fixture.DeviceDefinition, ieee str
 func (m *MockAdapter) GetVirtualDevices() []*fixture.VirtualDevice {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	res := make([]*fixture.VirtualDevice, 0, len(m.virtualDevices))
-	for _, v := range m.virtualDevices {
-		res = append(res, v)
-	}
-	return res
+	return slices.Collect(maps.Values(m.virtualDevices))
 }
 
 // GetVirtualDevice retrieves a virtual device by IEEE address.

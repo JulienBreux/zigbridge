@@ -200,7 +200,7 @@ func TestWebAPIBindings(t *testing.T) {
 	}
 	defer func() { _ = getResp.Body.Close() }()
 
-	var bindings []map[string]interface{}
+	var bindings []map[string]any
 	if err := json.NewDecoder(getResp.Body).Decode(&bindings); err != nil {
 		t.Fatalf("failed to decode bindings: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestWebSimulationLab(t *testing.T) {
 
 	// 3. POST /api/test/devices (Spawn SNZB-01P)
 	testIEEE := "0x00124b0001020304"
-	spawnPayload := map[string]interface{}{
+	spawnPayload := map[string]any{
 		"model": "SNZB-01P",
 		"ieee":  testIEEE,
 		"nwk":   0x1234,
@@ -403,11 +403,11 @@ func TestWebSimulationLab(t *testing.T) {
 	}
 
 	var virtualDevices []struct {
-		IEEE   string                 `json:"ieee"`
-		NWK    uint16                 `json:"nwk"`
-		Model  string                 `json:"model"`
-		Vendor string                 `json:"vendor"`
-		State  map[string]interface{} `json:"state"`
+		IEEE   string         `json:"ieee"`
+		NWK    uint16         `json:"nwk"`
+		Model  string         `json:"model"`
+		Vendor string         `json:"vendor"`
+		State  map[string]any `json:"state"`
 	}
 	if err := json.NewDecoder(devsResp.Body).Decode(&virtualDevices); err != nil {
 		t.Fatalf("failed to decode virtual devices: %v", err)
@@ -444,7 +444,7 @@ func TestWebSimulationLab(t *testing.T) {
 	// 6. POST /api/test/devices/{ieee}/telemetry
 	batt := uint8(85)
 	volt := uint16(2950)
-	telemetryPayload := map[string]interface{}{
+	telemetryPayload := map[string]any{
 		"battery": batt,
 		"voltage": volt,
 	}

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"context"
 	"embed"
 	"encoding/json"
@@ -10,7 +11,7 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/http"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -67,10 +68,7 @@ func NewServer(cfg *config.WebConfig, ctrl *controller.Controller) *Server {
 
 // Start launches the HTTP server and event forwarding goroutine.
 func (s *Server) Start(ctx context.Context) error {
-	addr := s.cfg.ListenAddr
-	if addr == "" {
-		addr = "0.0.0.0:8080"
-	}
+	addr := cmp.Or(s.cfg.ListenAddr, "0.0.0.0:8080")
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -209,10 +207,7 @@ func (s *Server) handlePermitJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	duration := body.Time
-	if duration == 0 && body.Duration > 0 {
-		duration = body.Duration
-	}
+	duration := cmp.Or(body.Time, body.Duration)
 
 	if err := s.controller.PermitJoin(r.Context(), duration); err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -222,7 +217,7 @@ func (s *Server) handlePermitJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success":  true,
 		"duration": duration,
 	})
@@ -257,7 +252,7 @@ func (s *Server) handleDeviceRename(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success":       true,
 		"ieee":          ieee,
 		"friendly_name": body.FriendlyName,
@@ -293,7 +288,7 @@ func (s *Server) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := map[string]interface{}{
+	resp := map[string]any{
 		"success": true,
 		"binding": b,
 	}
@@ -435,16 +430,16 @@ type DefinitionSummary struct {
 
 // VirtualDeviceSummary provides virtual device runtime overview for simulation UI.
 type VirtualDeviceSummary struct {
-	IEEE           string                 `json:"ieee"`
-	NWK            uint16                 `json:"nwk"`
-	Model          string                 `json:"model"`
-	Vendor         string                 `json:"vendor"`
-	Description    string                 `json:"description"`
-	State          map[string]interface{} `json:"state"`
-	Actions        []string               `json:"actions"`
-	HasBattery     bool                   `json:"has_battery"`
-	HasTemperature bool                   `json:"has_temperature"`
-	HasHumidity    bool                   `json:"has_humidity"`
+	IEEE           string         `json:"ieee"`
+	NWK            uint16         `json:"nwk"`
+	Model          string         `json:"model"`
+	Vendor         string         `json:"vendor"`
+	Description    string         `json:"description"`
+	State          map[string]any `json:"state"`
+	Actions        []string       `json:"actions"`
+	HasBattery     bool           `json:"has_battery"`
+	HasTemperature bool           `json:"has_temperature"`
+	HasHumidity    bool           `json:"has_humidity"`
 }
 
 // SpawnDevicePayload describes parameters to instantiate a virtual device.
@@ -476,7 +471,7 @@ func (s *Server) handleTestStatus(w http.ResponseWriter, r *http.Request) {
 	if s.controller.IsSimulationSupported() {
 		adapterType = "mock"
 	}
-	resp := map[string]interface{}{
+	resp := map[string]any{
 		"supported":              s.controller.IsSimulationSupported(),
 		"adapter":                adapterType,
 		"devices":                count,
@@ -501,7 +496,7 @@ func (s *Server) handleGetDefinitions(w http.ResponseWriter, r *http.Request) {
 		for a := range d.Device.Simulations.Actions {
 			actions = append(actions, a)
 		}
-		sort.Strings(actions)
+		slices.Sort(actions)
 
 		_, hasBatt := d.Device.Simulations.Telemetry["battery"]
 		_, hasTemp := d.Device.Simulations.Telemetry["temperature"]
@@ -537,7 +532,7 @@ func (s *Server) handleGetVirtualDevices(w http.ResponseWriter, r *http.Request)
 		for a := range def.Device.Simulations.Actions {
 			actions = append(actions, a)
 		}
-		sort.Strings(actions)
+		slices.Sort(actions)
 
 		_, hasBatt := def.Device.Simulations.Telemetry["battery"]
 		_, hasTemp := def.Device.Simulations.Telemetry["temperature"]
@@ -616,7 +611,7 @@ func (s *Server) handleSpawnVirtualDevice(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 		"ieee":    ieee,
 		"nwk":     nwk,
@@ -661,7 +656,7 @@ func (s *Server) handleVirtualDeviceAction(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 		"action":  body.Action,
 		"state":   vdev.GetState(),
@@ -724,7 +719,7 @@ func (s *Server) handleVirtualDeviceTelemetry(w http.ResponseWriter, r *http.Req
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 		"state":   vdev.GetState(),
 	})

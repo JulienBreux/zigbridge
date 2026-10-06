@@ -21,7 +21,7 @@ var GlobalPool = NewBufferPool(DefaultBufferSize)
 func NewBufferPool(size int) *BufferPool {
 	return &BufferPool{
 		pool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				b := make([]byte, size)
 				return &b
 			},

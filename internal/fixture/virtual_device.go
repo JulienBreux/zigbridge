@@ -3,6 +3,7 @@ package fixture
 import (
 	"encoding/binary"
 	"fmt"
+	"maps"
 	"sync"
 
 	"github.com/julienbreux/zigbridge/internal/adapter"
@@ -23,7 +24,7 @@ type VirtualDevice struct {
 	NWK     uint16
 	emitter FrameEmitter
 	seq     uint8
-	state   map[string]interface{}
+	state   map[string]any
 }
 
 // NewVirtualDevice instantiates a virtual device from a definition.
@@ -33,7 +34,7 @@ func NewVirtualDevice(def *DeviceDefinition, ieee string, nwk uint16, emitter Fr
 		IEEE:    ieee,
 		NWK:     nwk,
 		emitter: emitter,
-		state:   make(map[string]interface{}),
+		state:   make(map[string]any),
 	}
 }
 
@@ -304,13 +305,11 @@ func (v *VirtualDevice) ReportElectrical(powerW float64, voltageV float64, curre
 }
 
 // GetState returns a snapshot of simulated device state.
-func (v *VirtualDevice) GetState() map[string]interface{} {
+func (v *VirtualDevice) GetState() map[string]any {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	cp := make(map[string]interface{}, len(v.state))
-	for k, val := range v.state {
-		cp[k] = val
-	}
+	cp := make(map[string]any, len(v.state))
+	maps.Copy(cp, v.state)
 	return cp
 }

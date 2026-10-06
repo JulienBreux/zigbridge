@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"cmp"
+	"maps"
 	"strconv"
 	"strings"
 	"sync"
@@ -12,27 +14,25 @@ import (
 
 // Device represents a Zigbee node registered on the network.
 type Device struct {
-	IEEE           string                 `json:"ieee"`
-	NWK            uint16                 `json:"nwk"`
-	FriendlyName   string                 `json:"friendly_name"`
-	Model          string                 `json:"model"`
-	Manufacturer   string                 `json:"manufacturer"`
-	Endpoints      []uint16               `json:"endpoints"`
-	InputClusters  []zcl.ClusterID        `json:"input_clusters"`  // Server clusters (controllable)
-	OutputClusters []zcl.ClusterID        `json:"output_clusters"` // Client clusters (controllers/sensors)
-	State          map[string]interface{} `json:"state"`
-	LQI            uint8                  `json:"lqi"`
-	Battery        uint8                  `json:"battery"`
-	Available      bool                   `json:"available"`
-	LastSeen       time.Time              `json:"last_seen"`
+	IEEE           string          `json:"ieee"`
+	NWK            uint16          `json:"nwk"`
+	FriendlyName   string          `json:"friendly_name"`
+	Model          string          `json:"model"`
+	Manufacturer   string          `json:"manufacturer"`
+	Endpoints      []uint16        `json:"endpoints"`
+	InputClusters  []zcl.ClusterID `json:"input_clusters"`  // Server clusters (controllable)
+	OutputClusters []zcl.ClusterID `json:"output_clusters"` // Client clusters (controllers/sensors)
+	State          map[string]any  `json:"state"`
+	LQI            uint8           `json:"lqi"`
+	Battery        uint8           `json:"battery"`
+	Available      bool            `json:"available"`
+	LastSeen       time.Time       `json:"last_seen"`
 }
 
 // ToSnapshot converts a Device to an AI DeviceSnapshot for topology analysis.
 func (d *Device) ToSnapshot() ai.DeviceSnapshot {
-	stateCopy := make(map[string]interface{}, len(d.State))
-	for k, v := range d.State {
-		stateCopy[k] = v
-	}
+	stateCopy := make(map[string]any, len(d.State))
+	maps.Copy(stateCopy, d.State)
 
 	return ai.DeviceSnapshot{
 		IEEE:           d.IEEE,
@@ -64,10 +64,8 @@ func (d *Device) Clone() *Device {
 		cp.OutputClusters = append([]zcl.ClusterID(nil), d.OutputClusters...)
 	}
 	if d.State != nil {
-		cp.State = make(map[string]interface{}, len(d.State))
-		for k, v := range d.State {
-			cp.State[k] = v
-		}
+		cp.State = make(map[string]any, len(d.State))
+		maps.Copy(cp.State, d.State)
 	}
 	return &cp
 }
@@ -177,11 +175,9 @@ func (r *DeviceRegistry) Upsert(d *Device) {
 		}
 	}
 
-	if d.FriendlyName == "" {
-		d.FriendlyName = d.IEEE
-	}
+	d.FriendlyName = cmp.Or(d.FriendlyName, d.IEEE)
 	if d.State == nil {
-		d.State = make(map[string]interface{})
+		d.State = make(map[string]any)
 	}
 
 	r.devices[d.IEEE] = d
@@ -200,7 +196,7 @@ func (r *DeviceRegistry) SetFriendlyName(key, name string) bool {
 }
 
 // UpdateState merges new state attributes into the device record.
-func (r *DeviceRegistry) UpdateState(key string, updates map[string]interface{}, lqi uint8) (*Device, bool) {
+func (r *DeviceRegistry) UpdateState(key string, updates map[string]any, lqi uint8) (*Device, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

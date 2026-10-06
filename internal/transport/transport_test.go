@@ -103,9 +103,7 @@ func TestTCPTransportConnectAndReconnect(t *testing.T) {
 	defer cancel()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		conn, err := listener.Accept()
 		if err != nil {
 			return
@@ -117,7 +115,7 @@ func TestTCPTransportConnectAndReconnect(t *testing.T) {
 		if n > 0 {
 			_, _ = conn.Write(append([]byte("ACK:"), buf[:n]...))
 		}
-	}()
+	})
 
 	if err := transport.Open(ctx); err != nil {
 		t.Fatalf("failed to open TCP transport: %v", err)

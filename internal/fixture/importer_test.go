@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/julienbreux/zigbridge/internal/fixture"
@@ -307,13 +308,7 @@ func TestImportA7Z(t *testing.T) {
 	}
 
 	// Verify Zigbee models contains TS011F alias
-	hasTS011F := false
-	for _, zm := range def.Device.ZigbeeModels {
-		if zm == "TS011F" {
-			hasTS011F = true
-			break
-		}
-	}
+	hasTS011F := slices.Contains(def.Device.ZigbeeModels, "TS011F")
 	if !hasTS011F {
 		t.Errorf("expected TS011F in ZigbeeModels, got %v", def.Device.ZigbeeModels)
 	}

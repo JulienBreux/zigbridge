@@ -27,13 +27,13 @@ type Client interface {
 	Publish(topic string, qos byte, retained bool, payload []byte) error
 
 	// PublishJSON marshals and sends a JSON payload.
-	PublishJSON(topic string, qos byte, retained bool, v interface{}) error
+	PublishJSON(topic string, qos byte, retained bool, v any) error
 
 	// Subscribe listens for incoming messages on a topic pattern.
 	Subscribe(topic string, qos byte, handler MessageHandler) error
 
 	// PublishDeviceState broadcasts state changes for a device.
-	PublishDeviceState(ieee string, state map[string]interface{}) error
+	PublishDeviceState(ieee string, state map[string]any) error
 
 	// PublishDiscovery publishes Home Assistant auto-discovery configs.
 	PublishDiscovery(entity HAEntityConfig) error

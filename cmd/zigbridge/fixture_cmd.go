@@ -6,17 +6,17 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/julienbreux/zigbridge/internal/fixture"
 )
 
-func printF(w io.Writer, format string, a ...interface{}) {
+func printF(w io.Writer, format string, a ...any) {
 	_, _ = fmt.Fprintf(w, format, a...)
 }
 
-func printLn(w io.Writer, a ...interface{}) {
+func printLn(w io.Writer, a ...any) {
 	_, _ = fmt.Fprintln(w, a...)
 }
 
@@ -88,7 +88,7 @@ func runFixtureCommand(args []string, stdout, stderr io.Writer) int {
 			for a := range def.Device.Simulations.Actions {
 				actions = append(actions, a)
 			}
-			sort.Strings(actions)
+			slices.Sort(actions)
 			printF(stdout, "  Simulated Actions: %s\n", strings.Join(actions, ", "))
 		}
 		return 0
@@ -113,8 +113,8 @@ func runFixtureCommand(args []string, stdout, stderr io.Writer) int {
 		}
 
 		defs := reg.List()
-		sort.Slice(defs, func(i, j int) bool {
-			return defs[i].Device.Model < defs[j].Device.Model
+		slices.SortFunc(defs, func(a, b *fixture.DeviceDefinition) int {
+			return strings.Compare(a.Device.Model, b.Device.Model)
 		})
 
 		printF(stdout, "Available Device Fixtures (%d):\n", len(defs))
@@ -125,7 +125,7 @@ func runFixtureCommand(args []string, stdout, stderr io.Writer) int {
 			for a := range d.Device.Simulations.Actions {
 				actions = append(actions, a)
 			}
-			sort.Strings(actions)
+			slices.Sort(actions)
 			actionsStr := strings.Join(actions, ", ")
 			if actionsStr == "" {
 				actionsStr = "-"

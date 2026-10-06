@@ -132,7 +132,7 @@ func (h *LLMAnalyzerHook) Analyze(ctx context.Context, topology NetworkTopology,
 }
 
 func (h *LLMAnalyzerHook) callEndpoint(ctx context.Context, prompt string) ([]Recommendation, error) {
-	reqBody, _ := json.Marshal(map[string]interface{}{
+	reqBody, _ := json.Marshal(map[string]any{
 		"prompt": prompt,
 	})
 

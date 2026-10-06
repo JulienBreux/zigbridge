@@ -52,10 +52,10 @@ type SimulationDef struct {
 
 // ActionSim defines simulated cluster and command invocation for a button action.
 type ActionSim struct {
-	Cluster     uint16                 `yaml:"cluster" json:"cluster"`
-	Command     uint8                  `yaml:"command" json:"command"`
-	Payload     []byte                 `yaml:"payload,omitempty" json:"payload,omitempty"`
-	MQTTPayload map[string]interface{} `yaml:"mqtt_payload" json:"mqtt_payload"`
+	Cluster     uint16         `yaml:"cluster" json:"cluster"`
+	Command     uint8          `yaml:"command" json:"command"`
+	Payload     []byte         `yaml:"payload,omitempty" json:"payload,omitempty"`
+	MQTTPayload map[string]any `yaml:"mqtt_payload" json:"mqtt_payload"`
 }
 
 // TelemetrySim defines cluster and attribute identifiers for sensor reporting.

@@ -7,9 +7,9 @@ import (
 
 // BridgeEvent encapsulates a typed event within the bridge runtime.
 type BridgeEvent struct {
-	Type      string      `json:"type"` // "device_state", "device_join", "binding_change", "permit_join", "ai_recommendation", "frame"
-	Payload   interface{} `json:"payload"`
-	Timestamp time.Time   `json:"timestamp"`
+	Type      string    `json:"type"` // "device_state", "device_join", "binding_change", "permit_join", "ai_recommendation", "frame"
+	Payload   any       `json:"payload"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // EventBus provides high-performance, non-blocking fan-out event routing.
@@ -48,7 +48,7 @@ func (b *EventBus) Unsubscribe(ch chan BridgeEvent) {
 }
 
 // Publish dispatches an event to all subscribers without blocking the publisher.
-func (b *EventBus) Publish(evtType string, payload interface{}) {
+func (b *EventBus) Publish(evtType string, payload any) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 

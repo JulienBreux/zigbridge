@@ -18,22 +18,22 @@ type DeviceEvent struct {
 	ClusterName  string        `json:"cluster_name"`
 	CommandID    uint8         `json:"command_id"`
 	AttributeID  uint16        `json:"attribute_id"`
-	Value        interface{}   `json:"value"`
+	Value        any           `json:"value"`
 	EventType    string        `json:"event_type"` // "attribute_report", "command", "state_change"
 }
 
 // DeviceSnapshot summarizes a device's cluster capabilities and state for AI network analysis.
 type DeviceSnapshot struct {
-	IEEE           string                 `json:"ieee"`
-	FriendlyName   string                 `json:"friendly_name"`
-	Model          string                 `json:"model"`
-	Manufacturer   string                 `json:"manufacturer"`
-	Endpoints      []uint16               `json:"endpoints"`
-	InputClusters  []zcl.ClusterID        `json:"input_clusters"`  // Server clusters (receives commands)
-	OutputClusters []zcl.ClusterID        `json:"output_clusters"` // Client clusters (sends commands)
-	State          map[string]interface{} `json:"state"`
-	LQI            uint8                  `json:"lqi"`
-	LastSeen       time.Time              `json:"last_seen"`
+	IEEE           string          `json:"ieee"`
+	FriendlyName   string          `json:"friendly_name"`
+	Model          string          `json:"model"`
+	Manufacturer   string          `json:"manufacturer"`
+	Endpoints      []uint16        `json:"endpoints"`
+	InputClusters  []zcl.ClusterID `json:"input_clusters"`  // Server clusters (receives commands)
+	OutputClusters []zcl.ClusterID `json:"output_clusters"` // Client clusters (sends commands)
+	State          map[string]any  `json:"state"`
+	LQI            uint8           `json:"lqi"`
+	LastSeen       time.Time       `json:"last_seen"`
 }
 
 // BindingSnapshot represents a currently active binding in the network.
@@ -95,14 +95,16 @@ func (ec *EventCollector) RecentEvents(limit int) []DeviceEvent {
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
 
-	if limit <= 0 || limit > ec.count {
+	if limit <= 0 {
 		limit = ec.count
+	} else {
+		limit = min(limit, ec.count)
 	}
 
 	result := make([]DeviceEvent, limit)
 	start := (ec.head - limit + ec.maxEvents) % ec.maxEvents
 
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		idx := (start + i) % ec.maxEvents
 		result[i] = ec.events[idx]
 	}

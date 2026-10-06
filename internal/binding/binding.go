@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -144,11 +146,7 @@ func (e *Engine) ListBindings() []*Binding {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	result := make([]*Binding, 0, len(e.bindings))
-	for _, b := range e.bindings {
-		result = append(result, b)
-	}
-	return result
+	return slices.Collect(maps.Values(e.bindings))
 }
 
 // GetBinding looks up a binding by its identifier.

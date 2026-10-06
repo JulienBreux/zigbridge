@@ -622,7 +622,7 @@ func TestDeviceRegistryDualLookupAndInterview(t *testing.T) {
 		NWK:          0x4321,
 		FriendlyName: "Living Room Plug",
 		Endpoints:    []uint16{1},
-		State:        make(map[string]interface{}),
+		State:        make(map[string]any),
 	}
 	reg.Upsert(dev)
 

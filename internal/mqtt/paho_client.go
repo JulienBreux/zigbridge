@@ -95,7 +95,7 @@ func (c *PahoClient) Publish(topic string, qos byte, retained bool, payload []by
 	return token.Error()
 }
 
-func (c *PahoClient) PublishJSON(topic string, qos byte, retained bool, v interface{}) error {
+func (c *PahoClient) PublishJSON(topic string, qos byte, retained bool, v any) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("failed to marshal json payload: %w", err)
@@ -121,7 +121,7 @@ func (c *PahoClient) Subscribe(topic string, qos byte, handler MessageHandler) e
 	return token.Error()
 }
 
-func (c *PahoClient) PublishDeviceState(ieee string, state map[string]interface{}) error {
+func (c *PahoClient) PublishDeviceState(ieee string, state map[string]any) error {
 	topic := fmt.Sprintf("%s/%s", c.cfg.BaseTopic, ieee)
 	return c.PublishJSON(topic, c.cfg.QoS, c.cfg.Retain, state)
 }

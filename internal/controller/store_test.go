@@ -51,7 +51,7 @@ func TestStoreLoadAndSave(t *testing.T) {
 		InputClusters:  []zcl.ClusterID{zcl.ClusterBasic, zcl.ClusterOnOff, zcl.ClusterLevelControl},
 		OutputClusters: []zcl.ClusterID{zcl.ClusterOTAUpgrade},
 		Battery:        0,
-		State:          map[string]interface{}{"state": "ON"},
+		State:          map[string]any{"state": "ON"},
 		LastSeen:       time.Date(2026, 10, 6, 10, 45, 0, 0, time.UTC),
 	}
 
@@ -65,7 +65,7 @@ func TestStoreLoadAndSave(t *testing.T) {
 		InputClusters:  []zcl.ClusterID{zcl.ClusterBasic, zcl.ClusterPowerConfiguration},
 		OutputClusters: []zcl.ClusterID{zcl.ClusterOnOff},
 		Battery:        95,
-		State:          map[string]interface{}{"battery": uint8(95)},
+		State:          map[string]any{"battery": uint8(95)},
 		LastSeen:       time.Date(2026, 10, 6, 10, 48, 12, 0, time.UTC),
 	}
 
@@ -251,11 +251,11 @@ func TestStoreConcurrentAccess(t *testing.T) {
 	workers := 10
 	iterations := 20
 
-	for w := 0; w < workers; w++ {
+	for w := range workers {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				ieee := "0x00124B001CA1000" + string(rune('0'+workerID))
 				reg.Upsert(&Device{
 					IEEE:         ieee,

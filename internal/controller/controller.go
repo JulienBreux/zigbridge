@@ -1,8 +1,11 @@
 package controller
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -100,7 +103,7 @@ func New(
 
 	// Wire binding engine events to EventBus and persistent storage
 	bindingEngine.SetChangeListener(func(b *binding.Binding, action string) {
-		c.eventBus.Publish("binding_change", map[string]interface{}{
+		c.eventBus.Publish("binding_change", map[string]any{
 			"action":  action,
 			"binding": b,
 		})
@@ -207,7 +210,7 @@ func (c *Controller) PermitJoin(ctx context.Context, duration uint8) error {
 	}
 
 	c.permitJoinRemaining.Store(uint32(duration))
-	c.eventBus.Publish("permit_join", map[string]interface{}{
+	c.eventBus.Publish("permit_join", map[string]any{
 		"duration":  duration,
 		"remaining": duration,
 	})
@@ -235,7 +238,7 @@ func (c *Controller) permitJoinCountdown(ctx context.Context, duration uint8) {
 		case <-ticker.C:
 			rem--
 			c.permitJoinRemaining.Store(uint32(rem))
-			c.eventBus.Publish("permit_join", map[string]interface{}{
+			c.eventBus.Publish("permit_join", map[string]any{
 				"remaining": rem,
 			})
 		}
@@ -248,7 +251,7 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 		return
 	}
 
-	stateUpdates := make(map[string]interface{})
+	stateUpdates := make(map[string]any)
 
 	// Parse attribute reports if present (Global profile commands)
 	isAttributeReport := frame.Header.Type == zcl.FrameTypeGlobal &&
@@ -381,9 +384,7 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 			if def, ok := c.fixtures.Get(existingDev.Model); ok {
 				for _, act := range def.Device.Simulations.Actions {
 					if act.Cluster == uint16(frame.ClusterID) && act.Command == frame.CommandID {
-						for k, v := range act.MQTTPayload {
-							stateUpdates[k] = v
-						}
+						maps.Copy(stateUpdates, act.MQTTPayload)
 						matchedAction = true
 						break
 					}
@@ -444,7 +445,7 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 	// Broadcast frame & state update on EventBus
 	c.eventBus.Publish("frame", frame)
 	if len(stateUpdates) > 0 {
-		c.eventBus.Publish("device_state", map[string]interface{}{
+		c.eventBus.Publish("device_state", map[string]any{
 			"ieee":          frame.SourceAddress,
 			"friendly_name": friendlyName,
 			"state":         stateUpdates,
@@ -467,7 +468,7 @@ func (c *Controller) HandleDeviceJoin(info adapter.DeviceJoinInfo) {
 		Endpoints:      []uint16{1},
 		InputClusters:  []zcl.ClusterID{zcl.ClusterBasic, zcl.ClusterIdentify, zcl.ClusterOnOff},
 		OutputClusters: []zcl.ClusterID{zcl.ClusterOnOff, zcl.ClusterLevelControl},
-		State:          make(map[string]interface{}),
+		State:          make(map[string]any),
 		Available:      true,
 		LastSeen:       time.Now().UTC(),
 	}
@@ -711,14 +712,8 @@ func (c *Controller) publishDeviceDiscovery(dev *Device) {
 	if !c.cfg.MQTT.Enabled || !c.cfg.MQTT.HADiscovery || c.mqtt == nil || !c.mqtt.IsConnected() || dev == nil {
 		return
 	}
-	mfr := dev.Manufacturer
-	if mfr == "" {
-		mfr = "Zigbee Device"
-	}
-	model := dev.Model
-	if model == "" {
-		model = "Standard Endpoint"
-	}
+	mfr := cmp.Or(dev.Manufacturer, "Zigbee Device")
+	model := cmp.Or(dev.Model, "Standard Endpoint")
 	haDev := mqtt.HADevice{
 		Identifiers:  []string{dev.IEEE},
 		Name:         dev.FriendlyName,
@@ -729,20 +724,10 @@ func (c *Controller) publishDeviceDiscovery(dev *Device) {
 	baseTopic := c.cfg.MQTT.BaseTopic
 
 	hasInCluster := func(cid zcl.ClusterID) bool {
-		for _, cluster := range dev.InputClusters {
-			if cluster == cid {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(dev.InputClusters, cid)
 	}
 	hasOutCluster := func(cid zcl.ClusterID) bool {
-		for _, cluster := range dev.OutputClusters {
-			if cluster == cid {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(dev.OutputClusters, cid)
 	}
 
 	// Always publish default on/off if InputClusters has OnOff or by default for basic devices
@@ -842,7 +827,7 @@ func (c *Controller) SetAnalyzer(a ai.Analyzer) {
 	c.analyzer = a
 }
 
-func toFloat64(val interface{}) (float64, bool) {
+func toFloat64(val any) (float64, bool) {
 	switch v := val.(type) {
 	case float64:
 		return v, true

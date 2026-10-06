@@ -9,7 +9,7 @@ import (
 type AttributeRecord struct {
 	AttributeID uint16
 	DataType    uint8
-	Value       interface{}
+	Value       any
 }
 
 // ParseAttributeReport extracts one or more attribute records from a ZCL report/read response payload.
@@ -80,7 +80,7 @@ func ParseReadAttributesResponse(payload []byte) ([]AttributeRecord, error) {
 	return records, nil
 }
 
-func parseValue(dataType uint8, data []byte) (interface{}, int, error) {
+func parseValue(dataType uint8, data []byte) (any, int, error) {
 	if len(data) == 0 {
 		return nil, 0, ErrFrameTooShort
 	}

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
@@ -47,9 +48,7 @@ type DeviceStore struct {
 
 // NewDeviceStore initializes a storage manager.
 func NewDeviceStore(filePath string, debounce time.Duration, registry *DeviceRegistry, bindings *binding.Engine) *DeviceStore {
-	if filePath == "" {
-		filePath = "data/devices.yaml"
-	}
+	filePath = cmp.Or(filePath, "data/devices.yaml")
 	return &DeviceStore{
 		filePath:    filePath,
 		debounce:    debounce,
@@ -82,14 +81,8 @@ func (s *DeviceStore) Load() error {
 			if pDev == nil {
 				continue
 			}
-			devIEEE := ieee
-			if pDev.IEEE != "" {
-				devIEEE = pDev.IEEE
-			}
-			friendlyName := pDev.FriendlyName
-			if friendlyName == "" {
-				friendlyName = devIEEE
-			}
+			devIEEE := cmp.Or(pDev.IEEE, ieee)
+			friendlyName := cmp.Or(pDev.FriendlyName, devIEEE)
 
 			dev := &Device{
 				IEEE:           devIEEE,
@@ -103,7 +96,7 @@ func (s *DeviceStore) Load() error {
 				Battery:        pDev.Battery,
 				Available:      true,
 				LastSeen:       pDev.LastSeen,
-				State:          make(map[string]interface{}),
+				State:          make(map[string]any),
 			}
 			if pDev.Battery > 0 {
 				dev.State["battery"] = pDev.Battery
@@ -122,9 +115,7 @@ func (s *DeviceStore) Load() error {
 			if b.ID == "" {
 				b.ID = binding.GenerateID(b.SrcIEEE, b.SrcEndpoint, b.ClusterID, b.DstIEEE, b.DstEndpoint)
 			}
-			if b.Status == "" {
-				b.Status = "active"
-			}
+			b.Status = cmp.Or(b.Status, "active")
 			s.bindingsRef.RestoreBinding(b)
 		}
 	}

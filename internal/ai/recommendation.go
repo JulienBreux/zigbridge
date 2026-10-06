@@ -26,10 +26,10 @@ const (
 
 // SceneAction defines a targeted operation within an automated scene suggestion.
 type SceneAction struct {
-	TargetIEEE     string                 `json:"target_ieee"`
-	TargetEndpoint uint8                  `json:"target_endpoint"`
-	Command        string                 `json:"command"` // e.g. "turn_on", "set_level"
-	Parameters     map[string]interface{} `json:"parameters"`
+	TargetIEEE     string         `json:"target_ieee"`
+	TargetEndpoint uint8          `json:"target_endpoint"`
+	Command        string         `json:"command"` // e.g. "turn_on", "set_level"
+	Parameters     map[string]any `json:"parameters"`
 }
 
 // SceneSuggestion describes an automated multi-device routine.

@@ -3,6 +3,7 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"sync"
 )
 
@@ -66,7 +67,7 @@ func (m *MockClient) Publish(topic string, qos byte, retained bool, payload []by
 	return nil
 }
 
-func (m *MockClient) PublishJSON(topic string, qos byte, retained bool, v interface{}) error {
+func (m *MockClient) PublishJSON(topic string, qos byte, retained bool, v any) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -81,7 +82,7 @@ func (m *MockClient) Subscribe(topic string, qos byte, handler MessageHandler) e
 	return nil
 }
 
-func (m *MockClient) PublishDeviceState(ieee string, state map[string]interface{}) error {
+func (m *MockClient) PublishDeviceState(ieee string, state map[string]any) error {
 	return m.PublishJSON("zigbridge/"+ieee, 0, false, state)
 }
 
@@ -102,7 +103,5 @@ func (m *MockClient) PublishBridgeState(online bool) error {
 func (m *MockClient) GetMessages() []PublishedMessage {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	cp := make([]PublishedMessage, len(m.messages))
-	copy(cp, m.messages)
-	return cp
+	return slices.Clone(m.messages)
 }
