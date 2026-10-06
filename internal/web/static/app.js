@@ -102,6 +102,7 @@ function switchTab(tabId) {
     const searchInput = document.getElementById('device-search');
     if (searchInput) searchInput.value = '';
     if (currentDevices && currentDevices.length > 0) {
+      sortDevicesByFriendlyName(currentDevices);
       renderDevicesTable(currentDevices);
     }
     loadDevices();
@@ -363,11 +364,25 @@ async function stopPermitJoin() {
 // Devices Management
 // ==============================================================================
 
+// Helper to sort devices alphabetically by Friendly Name (natural, case-insensitive, tie-break by IEEE)
+function sortDevicesByFriendlyName(devices) {
+  if (!Array.isArray(devices)) return devices;
+  devices.sort((a, b) => {
+    const nameA = (a.friendly_name || a.ieee || '').trim();
+    const nameB = (b.friendly_name || b.ieee || '').trim();
+    const cmp = nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+    if (cmp !== 0) return cmp;
+    return (a.ieee || '').localeCompare(b.ieee || '');
+  });
+  return devices;
+}
+
 async function loadDevices() {
   try {
     const res = await fetch('/api/devices');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     currentDevices = await res.json() || [];
+    sortDevicesByFriendlyName(currentDevices);
     renderDevicesTable(currentDevices);
     document.getElementById('nav-device-count').textContent = currentDevices.length;
   } catch (err) {
@@ -409,7 +424,7 @@ function renderDevicesTable(devices) {
   const tbody = document.getElementById('devices-table-body');
   if (!tbody) return;
 
-  if (devices.length === 0) {
+  if (!devices || devices.length === 0) {
     tbody.innerHTML = `
       <tr>
         <td colspan="11" style="text-align: center; color: var(--text-muted); padding: 32px;">
@@ -419,7 +434,9 @@ function renderDevicesTable(devices) {
     return;
   }
 
-  tbody.innerHTML = devices.map(dev => {
+  const sorted = sortDevicesByFriendlyName([...devices]);
+
+  tbody.innerHTML = sorted.map(dev => {
     const typeInfo = inferDeviceType(dev);
 
     // Qualitative signal strength
@@ -1404,7 +1421,8 @@ function openCreateBindingModal() {
 function populateDeviceSelect(selectId) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
-  sel.innerHTML = currentDevices.map(d => {
+  const sorted = sortDevicesByFriendlyName([...currentDevices]);
+  sel.innerHTML = sorted.map(d => {
     const label = d.friendly_name ? `${d.friendly_name} (${d.ieee})` : d.ieee;
     return `<option value="${escapeHtml(d.ieee)}">${escapeHtml(label)}</option>`;
   }).join('');

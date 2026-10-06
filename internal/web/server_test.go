@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -748,5 +749,45 @@ func TestWebAPICoordinatorDisconnected(t *testing.T) {
 		t.Errorf("expected 200 for get bindings, got %d", resp.StatusCode)
 	}
 }
+
+func TestWebAPIDevicesSortedByFriendlyName(t *testing.T) {
+	_, ctrl, baseURL := setupTestServer(t)
+
+	// Register 3 devices with out-of-order friendly names
+	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{IEEE: "0x0001", NWK: 0x1001})
+	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{IEEE: "0x0002", NWK: 0x1002})
+	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{IEEE: "0x0003", NWK: 0x1003})
+
+	ctrl.SetDeviceFriendlyName("0x0001", "Zebra Lamp")
+	ctrl.SetDeviceFriendlyName("0x0002", "apple Bulb")
+	ctrl.SetDeviceFriendlyName("0x0003", "Mango Switch")
+
+	resp, err := http.Get(baseURL + "/api/devices")
+	if err != nil {
+		t.Fatalf("failed to GET /api/devices: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", resp.StatusCode)
+	}
+
+	var devs []*controller.Device
+	if err := json.NewDecoder(resp.Body).Decode(&devs); err != nil {
+		t.Fatalf("failed to decode devices JSON: %v", err)
+	}
+
+	if len(devs) != 3 {
+		t.Fatalf("expected 3 devices, got %d", len(devs))
+	}
+
+	names := []string{devs[0].FriendlyName, devs[1].FriendlyName, devs[2].FriendlyName}
+	expected := []string{"apple Bulb", "Mango Switch", "Zebra Lamp"}
+
+	if !slices.Equal(names, expected) {
+		t.Errorf("expected devices sorted as %v, got %v", expected, names)
+	}
+}
+
 
 

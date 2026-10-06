@@ -3,6 +3,7 @@ package controller
 import (
 	"cmp"
 	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -131,7 +132,7 @@ func (r *DeviceRegistry) Get(key string) (*Device, bool) {
 	return d.Clone(), true
 }
 
-// GetAll returns a slice of all registered devices as safe clones.
+// GetAll returns a slice of all registered devices as safe clones, sorted by friendly name (ascending).
 func (r *DeviceRegistry) GetAll() []*Device {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -140,6 +141,16 @@ func (r *DeviceRegistry) GetAll() []*Device {
 	for _, d := range r.devices {
 		result = append(result, d.Clone())
 	}
+
+	slices.SortFunc(result, func(a, b *Device) int {
+		nameA := strings.ToLower(cmp.Or(a.FriendlyName, a.IEEE))
+		nameB := strings.ToLower(cmp.Or(b.FriendlyName, b.IEEE))
+		if nameA != nameB {
+			return cmp.Compare(nameA, nameB)
+		}
+		return cmp.Compare(a.IEEE, b.IEEE)
+	})
+
 	return result
 }
 
