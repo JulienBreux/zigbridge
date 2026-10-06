@@ -49,3 +49,23 @@
    - **MANDATORY**: After each modification, use Git idioms (Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`) to commit changes atomically.
    - Commit early and often: each logical change gets its own commit with an imperative summary explaining the *why*.
    - Never commit broken code; verify with `make test` and `make lint` prior to committing.
+7. **Go Modernization & Idiomatic Standards (Go 1.21-1.27+)**:
+   - **Modern Standard Library**:
+     - Use `math/rand/v2` (with `rand.N` and `rand.IntN`); never use legacy `math/rand`.
+     - Always use `errors.Is(err, ...)` and `errors.As(err, &target)`. Never use `os.IsNotExist` or direct error equality `err == ...` on wrapped errors.
+   - **Language Features & Readability**:
+     - Use `any` instead of `interface{}`.
+     - Use `for i := range n` instead of C-style index loops `for i := 0; i < n; i++`.
+     - Use builtin `min` / `max` instead of hand-rolled condition blocks.
+     - Use `cmp.Or` for fallback defaults (e.g. `val = cmp.Or(input, defaultVal)`).
+   - **Standard Library Slices & Maps**:
+     - Use `slices.Contains`, `slices.Clone`, `slices.DeleteFunc`, `slices.Sorted`, `maps.Clone`, `maps.Copy` instead of manual iteration loops.
+   - **Zero-Allocation & Performance (`perfsprint`)**:
+     - Avoid single-variable `fmt.Sprintf` when string concatenation (`a + b`) suffices to minimize heap allocations.
+     - Use `errors.New` instead of `fmt.Errorf` for static error strings without formatting verbs.
+   - **Modern Testing Patterns**:
+     - Always use `t.Context()` instead of `context.Background()` in test cases.
+     - Register teardowns with `t.Cleanup(func() { ... })`. Use `context.WithoutCancel(t.Context())` if cleanup requires a timeout context.
+   - **Tooling & Vulnerability Scanning**:
+     - Enforce `.golangci.yaml` with `modernize`, `usetesting`, `intrange`, `perfsprint`, and `errorlint`.
+     - Keep `make test`, `make lint`, `make modernize`, and `make vulncheck` green.
