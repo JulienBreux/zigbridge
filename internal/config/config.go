@@ -1,8 +1,12 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -31,6 +35,7 @@ type Config struct {
 	LogLevel  string          `yaml:"log_level"`
 	Transport TransportConfig `yaml:"transport"`
 	Adapter   AdapterConfig   `yaml:"adapter"`
+	Advanced  *AdapterConfig  `yaml:"advanced,omitempty"` // For compatibility with Zigbee2MQTT configuration.yaml
 	Network   NetworkConfig   `yaml:"network"`
 	MQTT      MQTTConfig      `yaml:"mqtt"`
 	Web       WebConfig       `yaml:"web"`
@@ -56,9 +61,158 @@ type TransportConfig struct {
 type AdapterConfig struct {
 	Type       AdapterType `yaml:"type"`        // "zstack", "ember", or "mock"
 	PanID      uint16      `yaml:"pan_id"`      // 16-bit PAN ID
-	ExtPanID   string      `yaml:"ext_pan_id"`  // 64-bit Extended PAN ID (hex string)
+	ExtPanID   string      `yaml:"ext_pan_id"`  // 64-bit Extended PAN ID (hex string or byte array)
 	Channel    uint8       `yaml:"channel"`     // Zigbee channel (11-26)
-	NetworkKey string      `yaml:"network_key"` // 16-byte network key (hex)
+	NetworkKey string      `yaml:"network_key"` // 16-byte network key (hex string or byte array)
+}
+
+// UnmarshalYAML implements custom unmarshaling to support both standard hex string formats
+// and Zigbee2MQTT byte arrays (sequences of ints) for ext_pan_id and network_key, plus decimal/hex pan_id.
+func (a *AdapterConfig) UnmarshalYAML(node *yaml.Node) error {
+	type rawAdapterConfig struct {
+		Type       AdapterType `yaml:"type"`
+		PanID      yaml.Node   `yaml:"pan_id"`
+		ExtPanID   yaml.Node   `yaml:"ext_pan_id"`
+		Channel    uint8       `yaml:"channel"`
+		NetworkKey yaml.Node   `yaml:"network_key"`
+	}
+
+	var raw rawAdapterConfig
+	if err := node.Decode(&raw); err != nil {
+		return err
+	}
+
+	if raw.Type != "" {
+		a.Type = raw.Type
+	}
+	if raw.Channel != 0 {
+		a.Channel = raw.Channel
+	}
+
+	if !raw.PanID.IsZero() {
+		panID, err := parsePanIDNode(&raw.PanID)
+		if err != nil {
+			return err
+		}
+		a.PanID = panID
+	}
+
+	if !raw.ExtPanID.IsZero() {
+		extPanID, err := parseExtPanIDNode(&raw.ExtPanID)
+		if err != nil {
+			return err
+		}
+		a.ExtPanID = extPanID
+	}
+
+	if !raw.NetworkKey.IsZero() {
+		netKey, err := parseNetworkKeyNode(&raw.NetworkKey)
+		if err != nil {
+			return err
+		}
+		a.NetworkKey = netKey
+	}
+
+	return nil
+}
+
+func parsePanIDNode(node *yaml.Node) (uint16, error) {
+	if node.Kind != yaml.ScalarNode {
+		return 0, fmt.Errorf("pan_id must be an integer or hex string, got node kind %d", node.Kind)
+	}
+	valStr := strings.TrimSpace(node.Value)
+	if strings.EqualFold(valStr, "generate") {
+		var b [2]byte
+		_, _ = rand.Read(b[:])
+		val := (uint16(b[0])<<8 | uint16(b[1])) & 0xFFFE
+		if val == 0 {
+			val = 0x1A62
+		}
+		return val, nil
+	}
+	if strings.HasPrefix(strings.ToLower(valStr), "0x") {
+		parsed, err := strconv.ParseUint(valStr[2:], 16, 16)
+		if err != nil {
+			return 0, fmt.Errorf("invalid hex pan_id '%s': %w", valStr, err)
+		}
+		return uint16(parsed), nil
+	}
+	// Try decimal first (e.g. 44982 or 6754)
+	parsed, err := strconv.ParseUint(valStr, 10, 16)
+	if err == nil {
+		return uint16(parsed), nil
+	}
+	// Try hex without 0x
+	parsed, err = strconv.ParseUint(valStr, 16, 16)
+	if err == nil {
+		return uint16(parsed), nil
+	}
+	return 0, fmt.Errorf("invalid pan_id '%s': must be a valid 16-bit integer", valStr)
+}
+
+func parseExtPanIDNode(node *yaml.Node) (string, error) {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		valStr := strings.TrimSpace(node.Value)
+		if strings.EqualFold(valStr, "generate") {
+			var b [8]byte
+			_, _ = rand.Read(b[:])
+			return "0x" + strings.ToUpper(hex.EncodeToString(b[:])), nil
+		}
+		if !strings.HasPrefix(strings.ToLower(valStr), "0x") {
+			valStr = "0x" + valStr
+		}
+		return strings.ToUpper(valStr[:2]) + strings.ToUpper(valStr[2:]), nil
+	case yaml.SequenceNode:
+		if len(node.Content) != 8 {
+			return "", fmt.Errorf("ext_pan_id byte array must contain exactly 8 bytes (got %d)", len(node.Content))
+		}
+		var b [8]byte
+		for i, elem := range node.Content {
+			var val int
+			if err := elem.Decode(&val); err != nil {
+				return "", fmt.Errorf("invalid byte in ext_pan_id at index %d: %w", i, err)
+			}
+			if val < 0 || val > 255 {
+				return "", fmt.Errorf("ext_pan_id byte at index %d out of range (0-255): %d", i, val)
+			}
+			b[i] = byte(val)
+		}
+		return "0x" + strings.ToUpper(hex.EncodeToString(b[:])), nil
+	default:
+		return "", fmt.Errorf("ext_pan_id must be a hex string or an 8-byte array, got node kind %d", node.Kind)
+	}
+}
+
+func parseNetworkKeyNode(node *yaml.Node) (string, error) {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		valStr := strings.TrimSpace(node.Value)
+		if strings.EqualFold(valStr, "generate") {
+			var b [16]byte
+			_, _ = rand.Read(b[:])
+			return strings.ToUpper(hex.EncodeToString(b[:])), nil
+		}
+		return valStr, nil
+	case yaml.SequenceNode:
+		if len(node.Content) != 16 {
+			return "", fmt.Errorf("network_key byte array must contain exactly 16 bytes (got %d)", len(node.Content))
+		}
+		var b [16]byte
+		for i, elem := range node.Content {
+			var val int
+			if err := elem.Decode(&val); err != nil {
+				return "", fmt.Errorf("invalid byte in network_key at index %d: %w", i, err)
+			}
+			if val < 0 || val > 255 {
+				return "", fmt.Errorf("network_key byte at index %d out of range (0-255): %d", i, val)
+			}
+			b[i] = byte(val)
+		}
+		return strings.ToUpper(hex.EncodeToString(b[:])), nil
+	default:
+		return "", fmt.Errorf("network_key must be a hex string or a 16-byte array, got node kind %d", node.Kind)
+	}
 }
 
 // NetworkConfig defines mesh network behaviors.
@@ -178,6 +332,25 @@ func Load(path string) (*Config, error) {
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse yaml config: %w", err)
+	}
+
+	// Support Zigbee2MQTT-style "advanced:" section by merging into Adapter
+	if cfg.Advanced != nil {
+		if cfg.Advanced.PanID != 0 {
+			cfg.Adapter.PanID = cfg.Advanced.PanID
+		}
+		if cfg.Advanced.ExtPanID != "" {
+			cfg.Adapter.ExtPanID = cfg.Advanced.ExtPanID
+		}
+		if cfg.Advanced.Channel != 0 {
+			cfg.Adapter.Channel = cfg.Advanced.Channel
+		}
+		if cfg.Advanced.NetworkKey != "" {
+			cfg.Adapter.NetworkKey = cfg.Advanced.NetworkKey
+		}
+		if cfg.Advanced.Type != "" {
+			cfg.Adapter.Type = cfg.Advanced.Type
+		}
 	}
 
 	if err := cfg.Validate(); err != nil {
