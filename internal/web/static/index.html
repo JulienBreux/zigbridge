@@ -36,11 +36,10 @@
         <span id="permit-join-timer" style="display:none;">(0s)</span>
       </button>
 
-      <!-- Advanced Mode Switch -->
-      <button id="toggle-advanced-mode" class="mode-toggle-btn" onclick="toggleAdvancedMode()" title="Toggle between Simple and Advanced (Technical) modes">
-        <span class="mode-toggle-icon">⚙️</span>
-        <span id="mode-toggle-label">Advanced Mode</span>
+      <!-- Advance Mode Switch -->
+      <button id="toggle-advanced-mode" class="mode-toggle-btn" onclick="toggleAdvancedMode()" title="Toggle between Simple and Advance modes">
         <span id="mode-toggle-status" class="mode-badge">OFF</span>
+        <span id="mode-toggle-label">Advance</span>
       </button>
     </div>
   </header>
@@ -104,7 +103,7 @@
       Devices <span id="nav-device-count" class="tab-count">0</span>
     </button>
     <button class="tab-btn" data-tab="bindings" onclick="switchTab('bindings')">
-      Direct Bindings <span id="nav-binding-count" class="tab-count">0</span>
+      Bindings <span id="nav-binding-count" class="tab-count">0</span>
     </button>
     <button id="tab-btn-ai" class="tab-btn" data-tab="ai" onclick="switchTab('ai')" style="display:none;">
       Smart Suggestions <span id="nav-rec-count" class="tab-count">0</span>
