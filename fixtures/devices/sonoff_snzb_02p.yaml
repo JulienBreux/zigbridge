@@ -1,0 +1,58 @@
+schema_version: "1.0"
+device:
+  model: "SNZB-02P"
+  vendor: "SONOFF"
+  description: "Temperature and humidity sensor"
+  zigbee_models:
+    - "SNZB-02P"
+
+  endpoints:
+    - endpoint: 1
+      profile_id: 0x0104 # Zigbee Home Automation (ZHA)
+      device_id: 0x0302  # Temperature Sensor
+      input_clusters:
+        - 0x0000 # genBasic
+        - 0x0001 # genPowerCfg
+        - 0x0003 # genIdentify
+        - 0x0402 # msTemperatureMeasurement
+        - 0x0405 # msRelativeHumidity
+      output_clusters:
+        - 0x0003 # genIdentify
+
+  exposes:
+    - type: "numeric"
+      name: "temperature"
+      property: "temperature"
+      unit: "°C"
+      description: "Measured temperature value"
+      access: 1
+
+    - type: "numeric"
+      name: "humidity"
+      property: "humidity"
+      unit: "%"
+      min: 0
+      max: 100
+      description: "Measured relative humidity"
+      access: 1
+
+    - type: "numeric"
+      name: "battery"
+      property: "battery"
+      unit: "%"
+      min: 0
+      max: 100
+      description: "Remaining battery percentage"
+      access: 1
+
+  simulations:
+    telemetry:
+      temperature:
+        cluster: 0x0402 # msTemperatureMeasurement
+        attribute: 0x0000 # MeasuredValue (degrees C * 100)
+      humidity:
+        cluster: 0x0405 # msRelativeHumidity
+        attribute: 0x0000 # MeasuredValue (% * 100)
+      battery:
+        cluster: 0x0001 # genPowerCfg
+        attribute: 0x0021

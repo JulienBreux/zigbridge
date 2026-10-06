@@ -1,0 +1,82 @@
+schema_version: "1.0"
+device:
+  model: "SNZB-01P"
+  vendor: "SONOFF"
+  description: "Wireless button"
+  zigbee_models:
+    - "SNZB-01P"
+
+  endpoints:
+    - endpoint: 1
+      profile_id: 0x0104 # Zigbee Home Automation (ZHA)
+      device_id: 0x0401  # Non-Color Controller
+      input_clusters:
+        - 0x0000 # genBasic
+        - 0x0001 # genPowerCfg
+        - 0x0003 # genIdentify
+        - 0x0020 # genPollCtrl
+      output_clusters:
+        - 0x0006 # genOnOff
+
+  exposes:
+    - type: "enum"
+      name: "action"
+      property: "action"
+      description: "Triggered button press action"
+      values:
+        - "single"
+        - "double"
+        - "long"
+      access: 1 # Read/Report
+
+    - type: "numeric"
+      name: "battery"
+      property: "battery"
+      unit: "%"
+      min: 0
+      max: 100
+      description: "Remaining battery percentage"
+      access: 1
+
+    - type: "numeric"
+      name: "voltage"
+      property: "voltage"
+      unit: "mV"
+      min: 2500
+      max: 3200
+      description: "Battery voltage in millivolts"
+      access: 1
+
+    - type: "numeric"
+      name: "linkquality"
+      property: "linkquality"
+      unit: "lqi"
+      min: 0
+      max: 255
+      description: "Radio link quality indicator"
+      access: 1
+
+  # Test simulation mappings: maps high-level test actions to raw ZCL frames and MQTT payloads
+  simulations:
+    actions:
+      single:
+        cluster: 0x0006 # genOnOff
+        command: 0x02   # Toggle
+        mqtt_payload:
+          action: "single"
+      double:
+        cluster: 0x0006 # genOnOff
+        command: 0x01   # On
+        mqtt_payload:
+          action: "double"
+      long:
+        cluster: 0x0006 # genOnOff
+        command: 0x00   # Off
+        mqtt_payload:
+          action: "long"
+
+    telemetry:
+      battery:
+        cluster: 0x0001          # genPowerCfg
+        attribute: 0x0021        # BatteryPercentageRemaining (0.5% increments, 0-200)
+        voltage_attribute: 0x0020 # BatteryVoltage (100mV units)
