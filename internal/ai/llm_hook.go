@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-
-	"github.com/julienbreux/zigbridge/internal/zcl"
 )
 
 // LLMClient defines the pluggable completion function for external LLMs.
@@ -136,7 +134,7 @@ func (h *LLMAnalyzerHook) callEndpoint(ctx context.Context, prompt string) ([]Re
 		"prompt": prompt,
 	})
 
-	req, err := http.NewRequestWithContext(ctx, "POST", h.endpoint, bytes.NewReader(reqBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.endpoint, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +164,7 @@ func (h *LLMAnalyzerHook) callEndpoint(ctx context.Context, prompt string) ([]Re
 			recs[i].CreatedAt = time.Now().UTC()
 		}
 		if recs[i].ClusterID != 0 && recs[i].ClusterName == "" {
-			recs[i].ClusterName = zcl.ClusterID(recs[i].ClusterID).String()
+			recs[i].ClusterName = recs[i].ClusterID.String()
 		}
 	}
 

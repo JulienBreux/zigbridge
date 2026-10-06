@@ -104,7 +104,7 @@ func (r *Registry) LoadFromDir(dir string) error {
 // Register validates and indexes a definition by its model name and zigbee model aliases.
 func (r *Registry) Register(def *DeviceDefinition) error {
 	if def == nil {
-		return fmt.Errorf("cannot register nil device definition")
+		return errors.New("cannot register nil device definition")
 	}
 	if err := def.Validate(); err != nil {
 		return err

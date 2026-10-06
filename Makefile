@@ -72,6 +72,22 @@ lint:
 		golangci-lint run; \
 	fi
 
+## modernize: Run modern Go code analysis and transformations
+.PHONY: modernize
+modernize:
+	@echo "==> Running modernize static checks..."
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run --enable=modernize; \
+	else \
+		echo "golangci-lint not found in PATH"; \
+	fi
+
+## vulncheck: Scan Go code and dependencies for known vulnerabilities
+.PHONY: vulncheck
+vulncheck:
+	@echo "==> Scanning for known vulnerabilities with govulncheck..."
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
 ## fmt: Format all Go source files
 .PHONY: fmt
 fmt:

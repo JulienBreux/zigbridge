@@ -366,14 +366,14 @@ func (c *Config) Validate() error {
 	switch c.Transport.Type {
 	case TransportTypeTCP:
 		if c.Transport.URL == "" {
-			return fmt.Errorf("transport.url is required when transport.type is tcp")
+			return errors.New("transport.url is required when transport.type is tcp")
 		}
 	case TransportTypeSerial:
 		if c.Transport.Port == "" {
-			return fmt.Errorf("transport.port is required when transport.type is serial")
+			return errors.New("transport.port is required when transport.type is serial")
 		}
 		if c.Transport.BaudRate <= 0 {
-			return fmt.Errorf("transport.baudrate must be > 0")
+			return errors.New("transport.baudrate must be > 0")
 		}
 	case TransportTypeMock:
 		// Always valid
@@ -393,7 +393,7 @@ func (c *Config) Validate() error {
 	}
 
 	if c.Web.ListenAddr == "" {
-		return fmt.Errorf("web.listen_addr cannot be empty")
+		return errors.New("web.listen_addr cannot be empty")
 	}
 
 	if c.Storage.DevicesPath == "" {

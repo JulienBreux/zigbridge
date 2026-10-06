@@ -352,7 +352,7 @@ func GenerateFilenameSlug(vendor, model string) string {
 	reg := regexp.MustCompile(`[^a-z0-9]+`)
 	slug := reg.ReplaceAllString(raw, "_")
 	slug = strings.Trim(slug, "_")
-	return fmt.Sprintf("%s.yaml", slug)
+	return slug + ".yaml"
 }
 
 func extractRegex(src, pattern string) string {

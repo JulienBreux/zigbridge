@@ -2,6 +2,7 @@ package fixture
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"maps"
 	"sync"
@@ -50,7 +51,7 @@ func Spawn(def *DeviceDefinition, ieee string, nwk uint16, emitter FrameEmitter)
 // SimulateJoin fires the device join indication and emits basic identity attribute reports.
 func (v *VirtualDevice) SimulateJoin() error {
 	if v.emitter == nil {
-		return fmt.Errorf("no frame emitter attached to virtual device")
+		return errors.New("no frame emitter attached to virtual device")
 	}
 
 	// 1. Emit association / announcement
@@ -99,7 +100,7 @@ func (v *VirtualDevice) SimulateJoin() error {
 // TriggerAction triggers a simulated button press or action command.
 func (v *VirtualDevice) TriggerAction(actionName string) error {
 	if v.emitter == nil {
-		return fmt.Errorf("no frame emitter attached to virtual device")
+		return errors.New("no frame emitter attached to virtual device")
 	}
 
 	act, ok := v.Def.Device.Simulations.Actions[actionName]
@@ -134,7 +135,7 @@ func (v *VirtualDevice) TriggerAction(actionName string) error {
 // ReportBattery simulates a battery percentage and terminal voltage telemetry report.
 func (v *VirtualDevice) ReportBattery(percentage uint8, voltageMV uint16) error {
 	if v.emitter == nil {
-		return fmt.Errorf("no frame emitter attached to virtual device")
+		return errors.New("no frame emitter attached to virtual device")
 	}
 
 	var payload []byte
@@ -175,7 +176,7 @@ func (v *VirtualDevice) ReportBattery(percentage uint8, voltageMV uint16) error 
 // ReportTemperatureHumidity simulates environmental sensor reports.
 func (v *VirtualDevice) ReportTemperatureHumidity(tempC float64, humidityPct float64) error {
 	if v.emitter == nil {
-		return fmt.Errorf("no frame emitter attached to virtual device")
+		return errors.New("no frame emitter attached to virtual device")
 	}
 
 	v.mu.Lock()
@@ -229,7 +230,7 @@ func (v *VirtualDevice) ReportTemperatureHumidity(tempC float64, humidityPct flo
 // ReportElectrical simulates electrical telemetry reports (power, voltage, current, and energy).
 func (v *VirtualDevice) ReportElectrical(powerW float64, voltageV float64, currentA float64, energyKWh float64) error {
 	if v.emitter == nil {
-		return fmt.Errorf("no frame emitter attached to virtual device")
+		return errors.New("no frame emitter attached to virtual device")
 	}
 
 	v.mu.Lock()

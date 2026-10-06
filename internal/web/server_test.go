@@ -44,7 +44,7 @@ func setupTestServer(t *testing.T) (*web.Server, *controller.Controller, string)
 	}
 
 	addr := srv.Addr().String()
-	baseURL := fmt.Sprintf("http://%s", addr)
+	baseURL := "http://" + addr
 
 	t.Cleanup(func() {
 		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 2*time.Second)

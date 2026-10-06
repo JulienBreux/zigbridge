@@ -41,7 +41,7 @@ func (c *PahoClient) Connect(ctx context.Context) error {
 	}
 
 	// Set Last Will and Testament (LWT) for bridge availability
-	lwtTopic := fmt.Sprintf("%s/bridge/state", c.cfg.BaseTopic)
+	lwtTopic := c.cfg.BaseTopic + "/bridge/state"
 	opts.SetWill(lwtTopic, "offline", c.cfg.QoS, true)
 
 	client := paho.NewClient(opts)
@@ -135,7 +135,7 @@ func (c *PahoClient) PublishDiscovery(entity HAEntityConfig) error {
 }
 
 func (c *PahoClient) PublishBridgeState(online bool) error {
-	topic := fmt.Sprintf("%s/bridge/state", c.cfg.BaseTopic)
+	topic := c.cfg.BaseTopic + "/bridge/state"
 	payload := "offline"
 	if online {
 		payload = "online"

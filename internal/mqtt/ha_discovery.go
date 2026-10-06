@@ -44,7 +44,7 @@ func (e *HAEntityConfig) Topic(prefix, baseTopic, ieee string) string {
 	}
 	id := e.UniqueID
 	if id == "" {
-		id = fmt.Sprintf("action_%s", e.Subtype)
+		id = "action_" + e.Subtype
 	}
 	return fmt.Sprintf("%s/%s/%s/%s/config", prefix, e.Component, ieee, id)
 }
@@ -53,15 +53,15 @@ func (e *HAEntityConfig) Topic(prefix, baseTopic, ieee string) string {
 func NewOnOffDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	return HAEntityConfig{
 		Component:         "switch",
-		UniqueID:          fmt.Sprintf("%s_switch", ieee),
-		Name:              fmt.Sprintf("%s Switch", device.Name),
+		UniqueID:          ieee + "_switch",
+		Name:              device.Name + " Switch",
 		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
 		CommandTopic:      fmt.Sprintf("%s/%s/set", baseTopic, ieee),
 		ValueTemplate:     "{{ value_json.state }}",
 		PayloadOn:         "ON",
 		PayloadOff:        "OFF",
 		Device:            device,
-		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
 
@@ -69,14 +69,14 @@ func NewOnOffDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 func NewTemperatureDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	return HAEntityConfig{
 		Component:         "sensor",
-		UniqueID:          fmt.Sprintf("%s_temperature", ieee),
-		Name:              fmt.Sprintf("%s Temperature", device.Name),
+		UniqueID:          ieee + "_temperature",
+		Name:              device.Name + " Temperature",
 		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
 		ValueTemplate:     "{{ value_json.temperature }}",
 		DeviceClass:       "temperature",
 		UnitOfMeasurement: "°C",
 		Device:            device,
-		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
 
@@ -84,14 +84,14 @@ func NewTemperatureDiscovery(device HADevice, ieee, baseTopic string) HAEntityCo
 func NewHumidityDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	return HAEntityConfig{
 		Component:         "sensor",
-		UniqueID:          fmt.Sprintf("%s_humidity", ieee),
-		Name:              fmt.Sprintf("%s Humidity", device.Name),
+		UniqueID:          ieee + "_humidity",
+		Name:              device.Name + " Humidity",
 		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
 		ValueTemplate:     "{{ value_json.humidity }}",
 		DeviceClass:       "humidity",
 		UnitOfMeasurement: "%",
 		Device:            device,
-		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
 
@@ -99,15 +99,15 @@ func NewHumidityDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfi
 func NewOccupancyDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	return HAEntityConfig{
 		Component:         "binary_sensor",
-		UniqueID:          fmt.Sprintf("%s_occupancy", ieee),
-		Name:              fmt.Sprintf("%s Occupancy", device.Name),
+		UniqueID:          ieee + "_occupancy",
+		Name:              device.Name + " Occupancy",
 		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
 		ValueTemplate:     "{{ value_json.occupancy }}",
 		DeviceClass:       "motion",
 		PayloadOn:         "true",
 		PayloadOff:        "false",
 		Device:            device,
-		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
 
@@ -115,14 +115,14 @@ func NewOccupancyDiscovery(device HADevice, ieee, baseTopic string) HAEntityConf
 func NewPowerDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	return HAEntityConfig{
 		Component:         "sensor",
-		UniqueID:          fmt.Sprintf("%s_power", ieee),
-		Name:              fmt.Sprintf("%s Power", device.Name),
+		UniqueID:          ieee + "_power",
+		Name:              device.Name + " Power",
 		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
 		ValueTemplate:     "{{ value_json.power }}",
 		DeviceClass:       "power",
 		UnitOfMeasurement: "W",
 		Device:            device,
-		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
 
@@ -130,14 +130,14 @@ func NewPowerDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 func NewEnergyDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	return HAEntityConfig{
 		Component:         "sensor",
-		UniqueID:          fmt.Sprintf("%s_energy", ieee),
-		Name:              fmt.Sprintf("%s Energy", device.Name),
+		UniqueID:          ieee + "_energy",
+		Name:              device.Name + " Energy",
 		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
 		ValueTemplate:     "{{ value_json.energy }}",
 		DeviceClass:       "energy",
 		UnitOfMeasurement: "kWh",
 		Device:            device,
-		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
 
@@ -145,14 +145,14 @@ func NewEnergyDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig 
 func NewCurrentDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	return HAEntityConfig{
 		Component:         "sensor",
-		UniqueID:          fmt.Sprintf("%s_current", ieee),
-		Name:              fmt.Sprintf("%s Current", device.Name),
+		UniqueID:          ieee + "_current",
+		Name:              device.Name + " Current",
 		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
 		ValueTemplate:     "{{ value_json.current }}",
 		DeviceClass:       "current",
 		UnitOfMeasurement: "A",
 		Device:            device,
-		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
 
@@ -160,14 +160,14 @@ func NewCurrentDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig
 func NewMainsVoltageDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	return HAEntityConfig{
 		Component:         "sensor",
-		UniqueID:          fmt.Sprintf("%s_voltage", ieee),
-		Name:              fmt.Sprintf("%s Voltage", device.Name),
+		UniqueID:          ieee + "_voltage",
+		Name:              device.Name + " Voltage",
 		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
 		ValueTemplate:     "{{ value_json.voltage }}",
 		DeviceClass:       "voltage",
 		UnitOfMeasurement: "V",
 		Device:            device,
-		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
 
@@ -175,14 +175,14 @@ func NewMainsVoltageDiscovery(device HADevice, ieee, baseTopic string) HAEntityC
 func NewBatteryDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	return HAEntityConfig{
 		Component:         "sensor",
-		UniqueID:          fmt.Sprintf("%s_battery", ieee),
-		Name:              fmt.Sprintf("%s Battery", device.Name),
+		UniqueID:          ieee + "_battery",
+		Name:              device.Name + " Battery",
 		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
 		ValueTemplate:     "{{ value_json.battery }}",
 		DeviceClass:       "battery",
 		UnitOfMeasurement: "%",
 		Device:            device,
-		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
 
@@ -190,14 +190,14 @@ func NewBatteryDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig
 func NewVoltageDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	return HAEntityConfig{
 		Component:         "sensor",
-		UniqueID:          fmt.Sprintf("%s_voltage", ieee),
-		Name:              fmt.Sprintf("%s Voltage", device.Name),
+		UniqueID:          ieee + "_voltage",
+		Name:              device.Name + " Voltage",
 		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
 		ValueTemplate:     "{{ value_json.voltage }}",
 		DeviceClass:       "voltage",
 		UnitOfMeasurement: "mV",
 		Device:            device,
-		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
 
@@ -205,13 +205,13 @@ func NewVoltageDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig
 func NewActionDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	return HAEntityConfig{
 		Component:         "sensor",
-		UniqueID:          fmt.Sprintf("%s_action", ieee),
-		Name:              fmt.Sprintf("%s Action", device.Name),
+		UniqueID:          ieee + "_action",
+		Name:              device.Name + " Action",
 		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
 		ValueTemplate:     "{{ value_json.action }}",
 		Icon:              "mdi:gesture-tap-button",
 		Device:            device,
-		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
 

@@ -90,7 +90,7 @@ func parseValue(dataType uint8, data []byte) (any, int, error) {
 		return data[0] != 0, 1, nil
 
 	case TypeUint8, TypeData8, TypeBitmap8, TypeEnum8:
-		return uint8(data[0]), 1, nil
+		return data[0], 1, nil
 
 	case TypeInt8:
 		return int8(data[0]), 1, nil

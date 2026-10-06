@@ -1,0 +1,25 @@
+version: "2"
+
+linters:
+  enable:
+    - modernize
+    - intrange
+    - usestdlibvars
+    - usetesting
+    - perfsprint
+    - errorlint
+    - unconvert
+    - misspell
+    - nilerr
+    - wastedassign
+
+linters-settings:
+  modernize:
+    ignore: []
+  usetesting:
+    os-temp-dir: true
+    os-setenv: true
+    context-background: true
+
+run:
+  timeout: 5m
