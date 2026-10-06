@@ -127,10 +127,15 @@ header {
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   transition: all 0.2s ease;
+}
+
+.permit-join-btn svg {
+  flex-shrink: 0;
 }
 
 .permit-join-btn:hover {

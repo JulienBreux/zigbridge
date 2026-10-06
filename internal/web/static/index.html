@@ -30,12 +30,6 @@
         <span>📊 Diagnostics</span>
       </button>
 
-      <!-- Permit Join Button -->
-      <button id="permit-join-btn" class="permit-join-btn" onclick="openPermitJoinModal()" title="Open network to pair new devices">
-        <span>+ Add Device (Pair)</span>
-        <span id="permit-join-timer" style="display:none;">(0s)</span>
-      </button>
-
       <!-- Advance Mode Switch -->
       <button id="toggle-advanced-mode" class="mode-toggle-btn" onclick="toggleAdvancedMode()" title="Toggle between Simple and Advance modes">
         <span id="mode-toggle-status" class="mode-badge">OFF</span>
@@ -130,6 +124,13 @@
     <section id="tab-devices" class="tab-pane active">
       <div class="actions-bar">
         <input type="text" id="device-search" class="search-input" placeholder="Search devices by name, model, or room..." oninput="filterDevices()">
+        <button id="permit-join-btn" class="permit-join-btn" onclick="openPermitJoinModal()" title="Open network to pair new devices">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+            <path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"></path>
+          </svg>
+          <span>Add</span>
+          <span id="permit-join-timer" style="display:none;">(0s)</span>
+        </button>
       </div>
 
       <div class="table-container">
@@ -152,7 +153,7 @@
           <tbody id="devices-table-body">
             <tr>
               <td colspan="11" style="text-align: center; color: var(--text-muted); padding: 32px;">
-                No devices paired yet. Click <strong>+ Add Device (Pair)</strong> above to connect smart switches, lights, or sensors.
+                No devices paired yet. Click <strong>+ Add</strong> above to connect smart switches, lights, or sensors.
               </td>
             </tr>
           </tbody>

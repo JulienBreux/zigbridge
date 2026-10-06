@@ -254,7 +254,7 @@ function updateCoordinatorDependentUI(isOnline) {
     banner.style.display = isOnline ? 'none' : 'flex';
   }
 
-  // 2. Permit join (+ Add Device) button
+  // 2. Permit join (Add) button
   const permitBtn = document.getElementById('permit-join-btn');
   if (permitBtn) {
     permitBtn.disabled = !isOnline;
@@ -443,7 +443,7 @@ function renderDevicesTable(devices) {
     tbody.innerHTML = `
       <tr>
         <td colspan="11" style="text-align: center; color: var(--text-muted); padding: 32px;">
-          No devices paired yet. Click <strong>+ Add Device (Pair)</strong> above to connect smart switches, lights, or sensors.
+          No devices paired yet. Click <strong>+ Add</strong> above to connect smart switches, lights, or sensors.
         </td>
       </tr>`;
     return;
