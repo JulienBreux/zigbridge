@@ -138,15 +138,18 @@ async function loadStatus() {
 
     const coordPill = document.getElementById('coordinator-status-pill');
     const coordText = document.getElementById('coordinator-status-text');
-    if (isOnline) {
-      coordPill.className = 'badge badge-connected';
-      coordText.textContent = 'Coordinator: Online';
-    } else if (data.transport_status === 'reconnecting') {
-      coordPill.className = 'badge badge-disconnected';
-      coordText.textContent = 'Coordinator: Connecting...';
-    } else {
-      coordPill.className = 'badge badge-disconnected';
-      coordText.textContent = 'Coordinator: Offline';
+    if (coordText) coordText.textContent = 'Coordinator';
+    if (coordPill) {
+      if (isOnline) {
+        coordPill.className = 'badge badge-connected';
+        coordPill.title = 'Coordinator: Online';
+      } else if (data.transport_status === 'reconnecting') {
+        coordPill.className = 'badge badge-warning';
+        coordPill.title = 'Coordinator: Connecting...';
+      } else {
+        coordPill.className = 'badge badge-disconnected';
+        coordPill.title = 'Coordinator: Offline';
+      }
     }
 
     updateCoordinatorDependentUI(isOnline);
@@ -154,12 +157,15 @@ async function loadStatus() {
     // 2. MQTT Status Pill
     const mqttPill = document.getElementById('mqtt-status-pill');
     const mqttText = document.getElementById('mqtt-status-text');
-    if (data.mqtt_connected) {
-      mqttPill.className = 'badge badge-connected';
-      mqttText.textContent = 'MQTT: Connected';
-    } else {
-      mqttPill.className = 'badge badge-disconnected';
-      mqttText.textContent = 'MQTT: Offline / Disabled';
+    if (mqttText) mqttText.textContent = 'MQTT';
+    if (mqttPill) {
+      if (data.mqtt_connected) {
+        mqttPill.className = 'badge badge-connected';
+        mqttPill.title = 'MQTT: Connected';
+      } else {
+        mqttPill.className = 'badge badge-disconnected';
+        mqttPill.title = 'MQTT: Offline / Disabled';
+      }
     }
 
     // 3. Diagnostics Drawer Telemetry
