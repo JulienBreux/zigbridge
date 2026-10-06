@@ -9,11 +9,12 @@
 | `binding` | Direct Zigbee binding engine managing direct autonomous links between source/target device endpoints and clusters | `adapter`, `zcl` |
 | `ai` | Telemetry event ring buffer, interaction history logger, heuristic rule-based correlation analyzer, and LLM hook interface for smart binding & scene proposals | `zcl` |
 | `mqtt` | MQTT client, state publisher/subscriber, and Home Assistant MQTT Auto-Discovery entity configuration generator | `config` |
-| `controller` | Central orchestrator coordinating adapter, device registry, binding engine, AI recommender, MQTT dispatcher, and event broadcasting | `config`, `transport`, `adapter`, `binding`, `ai`, `mqtt`, `zcl` |
+| `fixture` | Declarative device definitions (Zigbee2MQTT format), embedded catalog, and virtual device simulator for testing | `zcl`, `adapter` |
+| `converter` | Zero-allocation inbound (`fromZigbee`) and outbound (`toZigbee`) declarative translation pipeline decoupling cluster math and vendor quirks from orchestrator | `zcl`, `fixture` |
+| `controller` | Central orchestrator coordinating adapter, device registry, binding engine, AI recommender, MQTT dispatcher, and event broadcasting | `config`, `transport`, `adapter`, `binding`, `ai`, `mqtt`, `zcl`, `converter` |
 | `web` | Embedded single-page dashboard (`embed.FS`) and HTTP REST / WebSocket event streaming API | `controller`, `binding`, `ai`, `adapter`, `zcl` |
 | `cli` | Command-line entrypoint (`cmd/zigbridge`), flags, graceful OS signal shutdown (`SIGINT`, `SIGTERM`), and logging setup | `config`, `controller`, `transport`, `adapter`, `web`, `mqtt` |
-| `fixture` | Declarative device definitions (Zigbee2MQTT format), embedded catalog, and virtual device simulator for testing | `zcl`, `adapter` |
 
 ## Build Order
 
-`config`, `transport`, `zcl` → `adapter`, `mqtt`, `ai`, `fixture` → `binding` → `controller` → `web` → `cli`
+`config`, `transport`, `zcl` → `adapter`, `mqtt`, `ai`, `fixture` → `converter` → `binding` → `controller` → `web` → `cli`
