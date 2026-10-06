@@ -85,6 +85,7 @@ function switchTab(tabId) {
 
   if (tabId === 'devices') loadDevices();
   if (tabId === 'bindings') loadBindings();
+  if (tabId === 'simulation') loadSimulationLab();
 }
 
 // Modal handling
@@ -164,6 +165,17 @@ async function loadStatus() {
     // Update Counts in Nav Tabs
     document.getElementById('nav-device-count').textContent = data.device_count || 0;
     document.getElementById('nav-binding-count').textContent = data.binding_count || 0;
+
+    // Show Simulation Lab tab if coordinator is mock
+    const simTabBtn = document.getElementById('tab-btn-simulation');
+    if (simTabBtn) {
+      if (data.coordinator?.type === 'mock') {
+        simTabBtn.style.display = 'inline-flex';
+        loadSimulationCount();
+      } else {
+        simTabBtn.style.display = 'none';
+      }
+    }
 
     // Permit join countdown
     updatePermitJoinDisplay(data.permit_join_remaining || 0);
@@ -846,6 +858,309 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// ==============================================================================
+// Simulation Lab (Mock Adapter Virtual Devices)
+// ==============================================================================
+
+let cachedDefinitions = [];
+
+async function loadSimulationCount() {
+  try {
+    const res = await fetch('/api/test/status');
+    if (!res.ok) return;
+    const data = await res.json();
+    const countEl = document.getElementById('nav-sim-count');
+    if (countEl) countEl.textContent = data.devices || 0;
+  } catch (err) {
+    // Silently ignore if simulation not supported or network error
+  }
+}
+
+async function loadSimulationLab() {
+  try {
+    const [statusRes, defsRes, devsRes] = await Promise.all([
+      fetch('/api/test/status'),
+      fetch('/api/test/definitions'),
+      fetch('/api/test/devices')
+    ]);
+
+    if (!statusRes.ok) return;
+    const statusData = await statusRes.json();
+    if (!statusData.supported) return;
+
+    if (defsRes.ok) {
+      cachedDefinitions = await defsRes.json();
+    }
+
+    let devices = [];
+    if (devsRes.ok) {
+      devices = await devsRes.json() || [];
+    }
+
+    const countEl = document.getElementById('nav-sim-count');
+    if (countEl) countEl.textContent = devices.length;
+
+    renderSimulationDevices(devices);
+  } catch (err) {
+    console.error('Failed to load simulation lab:', err);
+  }
+}
+
+function renderSimulationDevices(devices) {
+  const container = document.getElementById('sim-devices-container');
+  if (!container) return;
+
+  if (!devices || devices.length === 0) {
+    container.innerHTML = `
+      <div class="card" style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 36px;">
+        No simulated devices spawned yet. Click <strong>+ Spawn Simulated Device</strong> above to inject a virtual SONOFF SNZB-01P or other device.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = devices.map(dev => {
+    const ieee = dev.ieee;
+    const nwk = dev.nwk != null ? `0x${dev.nwk.toString(16).padStart(4, '0')}` : '--';
+    const model = dev.model || 'Unknown';
+    const vendor = dev.vendor || 'Unknown';
+    const desc = dev.description || '';
+    const state = dev.state || {};
+    const actions = dev.actions || [];
+    const hasBattery = !!dev.has_battery;
+    const hasSensors = !!(dev.has_temperature || dev.has_humidity);
+
+    // State badges
+    let stateBadges = [];
+    if (state.battery != null) {
+      stateBadges.push(`<span class="badge badge-info">🔋 ${state.battery}%</span>`);
+    }
+    if (state.voltage != null) {
+      stateBadges.push(`<span class="badge" style="background: rgba(255,255,255,0.06);">${state.voltage} mV</span>`);
+    }
+    if (state.action != null && state.action !== '') {
+      stateBadges.push(`<span class="badge badge-purple" id="sim-action-${escapeHtml(ieee)}">⚡ ${escapeHtml(state.action)}</span>`);
+    } else {
+      stateBadges.push(`<span class="badge" id="sim-action-${escapeHtml(ieee)}" style="color:var(--text-muted);">⚡ idle</span>`);
+    }
+    if (state.temperature != null) {
+      stateBadges.push(`<span class="badge badge-connected">🌡️ ${state.temperature.toFixed(1)}°C</span>`);
+    }
+    if (state.humidity != null) {
+      stateBadges.push(`<span class="badge badge-info">💧 ${state.humidity.toFixed(1)}%</span>`);
+    }
+
+    // Action buttons
+    let actionButtonsHtml = '';
+    if (actions.length > 0) {
+      actionButtonsHtml = `
+        <div style="margin-top: 14px;">
+          <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 6px;">
+            Simulate Physical Button Press
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            ${actions.map(act => `
+              <button class="btn btn-sm" onclick="triggerVirtualAction('${escapeHtml(ieee)}', '${escapeHtml(act)}')">
+                ${act === 'single' ? '👆 Single Click' : act === 'double' ? '✌️ Double Click' : act === 'long' ? '⏳ Long Press' : escapeHtml(act)}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Battery / Voltage Simulation
+    let batteryControlHtml = '';
+    if (hasBattery) {
+      batteryControlHtml = `
+        <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+          <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 6px;">
+            Simulate Battery State
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-sm" onclick="sendSimBattery('${escapeHtml(ieee)}', 100, 3100)">100% (3.1V)</button>
+            <button class="btn btn-sm" onclick="sendSimBattery('${escapeHtml(ieee)}', 75, 2900)">75% (2.9V)</button>
+            <button class="btn btn-sm" onclick="sendSimBattery('${escapeHtml(ieee)}', 25, 2700)">25% (2.7V)</button>
+            <button class="btn btn-sm btn-danger" onclick="sendSimBattery('${escapeHtml(ieee)}', 5, 2500)">5% Low Batt</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Environmental Telemetry Simulation (Temp / Hum)
+    let sensorControlHtml = '';
+    if (hasSensors) {
+      sensorControlHtml = `
+        <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+          <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 6px;">
+            Simulate Climate Telemetry
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-sm" onclick="sendSimSensors('${escapeHtml(ieee)}', 21.5, 48.0)">Normal (21.5°C, 48%)</button>
+            <button class="btn btn-sm" onclick="sendSimSensors('${escapeHtml(ieee)}', 28.0, 75.0)">Warm/Humid (28°C, 75%)</button>
+            <button class="btn btn-sm" onclick="sendSimSensors('${escapeHtml(ieee)}', 16.0, 35.0)">Cold/Dry (16°C, 35%)</button>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="card" id="sim-card-${escapeHtml(ieee)}">
+        <div class="card-header">
+          <div>
+            <span style="font-size: 15px; font-weight: 600; color: var(--text-primary);">${escapeHtml(vendor)} ${escapeHtml(model)}</span>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">
+              ${escapeHtml(desc)}
+            </div>
+          </div>
+          <span class="badge badge-purple">virtual</span>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0; font-size: 12px;">
+          <span class="mono" style="color: var(--text-secondary);">IEEE: <strong style="color: var(--text-primary);">${escapeHtml(ieee)}</strong></span>
+          <span class="mono" style="color: var(--text-secondary);">NWK: <strong style="color: var(--text-primary);">${escapeHtml(nwk)}</strong></span>
+        </div>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+          ${stateBadges.join('')}
+        </div>
+
+        ${actionButtonsHtml}
+        ${batteryControlHtml}
+        ${sensorControlHtml}
+      </div>
+    `;
+  }).join('');
+}
+
+async function openSpawnDeviceModal() {
+  try {
+    const res = await fetch('/api/test/definitions');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    cachedDefinitions = await res.json() || [];
+
+    const select = document.getElementById('spawn-device-model');
+    if (select) {
+      select.innerHTML = cachedDefinitions.map(d => `
+        <option value="${escapeHtml(d.model)}">
+          ${escapeHtml(d.vendor)} ${escapeHtml(d.model)} — ${escapeHtml(d.description || d.device_type)}
+        </option>
+      `).join('');
+    }
+
+    // Clear optional inputs
+    const ieeeInput = document.getElementById('spawn-device-ieee');
+    if (ieeeInput) ieeeInput.value = '';
+    const nwkInput = document.getElementById('spawn-device-nwk');
+    if (nwkInput) nwkInput.value = '';
+
+    openModal('modal-spawn-device');
+  } catch (err) {
+    alert(`Failed to load device definitions: ${err.message}`);
+  }
+}
+
+async function submitSpawnDevice() {
+  const modelSelect = document.getElementById('spawn-device-model');
+  const ieeeInput = document.getElementById('spawn-device-ieee');
+  const nwkInput = document.getElementById('spawn-device-nwk');
+
+  const model = modelSelect ? modelSelect.value : '';
+  if (!model) {
+    alert('Please select a device definition');
+    return;
+  }
+
+  const payload = { model };
+  if (ieeeInput && ieeeInput.value.trim() !== '') {
+    payload.ieee = ieeeInput.value.trim();
+  }
+  if (nwkInput && nwkInput.value.trim() !== '') {
+    const parsedNwk = parseInt(nwkInput.value.trim(), 10) || parseInt(nwkInput.value.trim(), 16);
+    if (!isNaN(parsedNwk)) {
+      payload.nwk = parsedNwk;
+    }
+  }
+
+  try {
+    const res = await fetch('/api/test/devices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
+
+    closeModal('modal-spawn-device');
+    loadSimulationLab();
+    loadDevices();
+    loadStatus();
+  } catch (err) {
+    alert(`Failed to spawn simulated device: ${err.message}`);
+  }
+}
+
+async function triggerVirtualAction(ieee, action) {
+  try {
+    const res = await fetch(`/api/test/devices/${encodeURIComponent(ieee)}/action`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action })
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
+
+    const badge = document.getElementById(`sim-action-${ieee}`);
+    if (badge) {
+      badge.textContent = `⚡ ${action}`;
+      badge.className = 'badge badge-purple';
+    }
+
+    // Refresh lab and status to pick up state updates
+    loadSimulationLab();
+  } catch (err) {
+    alert(`Failed to trigger action '${action}': ${err.message}`);
+  }
+}
+
+async function sendSimBattery(ieee, battery, voltage) {
+  try {
+    const res = await fetch(`/api/test/devices/${encodeURIComponent(ieee)}/telemetry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ battery, voltage })
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
+    loadSimulationLab();
+  } catch (err) {
+    alert(`Failed to report battery: ${err.message}`);
+  }
+}
+
+async function sendSimSensors(ieee, temperature, humidity) {
+  try {
+    const res = await fetch(`/api/test/devices/${encodeURIComponent(ieee)}/telemetry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ temperature, humidity })
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
+    loadSimulationLab();
+  } catch (err) {
+    alert(`Failed to report telemetry: ${err.message}`);
+  }
 }
 
 // ==============================================================================

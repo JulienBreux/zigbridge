@@ -309,3 +309,162 @@ func TestWebWebSocketLiveStream(t *testing.T) {
 		t.Errorf("expected WS message to contain test_event and payload, got: %s", string(msg))
 	}
 }
+
+func TestWebSimulationLab(t *testing.T) {
+	_, ctrl, baseURL, teardown := setupTestServer(t)
+	defer teardown()
+
+	// 1. GET /api/test/status
+	statusResp, err := http.Get(baseURL + "/api/test/status")
+	if err != nil {
+		t.Fatalf("failed to get simulation status: %v", err)
+	}
+	defer func() { _ = statusResp.Body.Close() }()
+
+	if statusResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK for test status, got %d", statusResp.StatusCode)
+	}
+
+	var simStatus struct {
+		Supported   bool   `json:"supported"`
+		Adapter     string `json:"adapter"`
+		Devices     int    `json:"devices"`
+		Definitions int    `json:"definitions"`
+	}
+	if err := json.NewDecoder(statusResp.Body).Decode(&simStatus); err != nil {
+		t.Fatalf("failed to decode sim status: %v", err)
+	}
+	if !simStatus.Supported {
+		t.Fatalf("expected simulation to be supported with mock adapter")
+	}
+	if simStatus.Definitions < 1 {
+		t.Fatalf("expected at least 1 fixture definition, got %d", simStatus.Definitions)
+	}
+
+	// 2. GET /api/test/definitions
+	defsResp, err := http.Get(baseURL + "/api/test/definitions")
+	if err != nil {
+		t.Fatalf("failed to get definitions: %v", err)
+	}
+	defer func() { _ = defsResp.Body.Close() }()
+
+	if defsResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK for definitions, got %d", defsResp.StatusCode)
+	}
+
+	var defs []struct {
+		Model       string   `json:"model"`
+		Vendor      string   `json:"vendor"`
+		Description string   `json:"description"`
+		Actions     []string `json:"actions"`
+	}
+	if err := json.NewDecoder(defsResp.Body).Decode(&defs); err != nil {
+		t.Fatalf("failed to decode definitions: %v", err)
+	}
+	hasSNZB01P := false
+	for _, d := range defs {
+		if d.Model == "SNZB-01P" {
+			hasSNZB01P = true
+			break
+		}
+	}
+	if !hasSNZB01P {
+		t.Fatalf("expected SNZB-01P in definitions")
+	}
+
+	// 3. POST /api/test/devices (Spawn SNZB-01P)
+	testIEEE := "0x00124b0001020304"
+	spawnPayload := map[string]interface{}{
+		"model": "SNZB-01P",
+		"ieee":  testIEEE,
+		"nwk":   0x1234,
+	}
+	spawnBody, _ := json.Marshal(spawnPayload)
+	spawnResp, err := http.Post(baseURL+"/api/test/devices", "application/json", bytes.NewBuffer(spawnBody))
+	if err != nil {
+		t.Fatalf("failed to spawn device: %v", err)
+	}
+	defer func() { _ = spawnResp.Body.Close() }()
+
+	if spawnResp.StatusCode != http.StatusCreated {
+		respBytes, _ := io.ReadAll(spawnResp.Body)
+		t.Fatalf("expected 201 Created, got %d: %s", spawnResp.StatusCode, string(respBytes))
+	}
+
+	// 4. GET /api/test/devices
+	devsResp, err := http.Get(baseURL + "/api/test/devices")
+	if err != nil {
+		t.Fatalf("failed to get virtual devices: %v", err)
+	}
+	defer func() { _ = devsResp.Body.Close() }()
+
+	if devsResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", devsResp.StatusCode)
+	}
+
+	var virtualDevices []struct {
+		IEEE   string                 `json:"ieee"`
+		NWK    uint16                 `json:"nwk"`
+		Model  string                 `json:"model"`
+		Vendor string                 `json:"vendor"`
+		State  map[string]interface{} `json:"state"`
+	}
+	if err := json.NewDecoder(devsResp.Body).Decode(&virtualDevices); err != nil {
+		t.Fatalf("failed to decode virtual devices: %v", err)
+	}
+	if len(virtualDevices) != 1 {
+		t.Fatalf("expected 1 virtual device, got %d", len(virtualDevices))
+	}
+	if virtualDevices[0].IEEE != testIEEE {
+		t.Errorf("expected IEEE %s, got %s", testIEEE, virtualDevices[0].IEEE)
+	}
+
+	// Verify device also appears in controller registry
+	dev, ok := ctrl.GetDevice(testIEEE)
+	if !ok {
+		t.Fatalf("expected device %s to be registered in controller", testIEEE)
+	}
+	if dev.Model != "SNZB-01P" {
+		t.Errorf("expected controller device model 'SNZB-01P', got '%s'", dev.Model)
+	}
+
+	// 5. POST /api/test/devices/{ieee}/action
+	actionPayload := map[string]string{"action": "single"}
+	actionBody, _ := json.Marshal(actionPayload)
+	actionResp, err := http.Post(fmt.Sprintf("%s/api/test/devices/%s/action", baseURL, testIEEE), "application/json", bytes.NewBuffer(actionBody))
+	if err != nil {
+		t.Fatalf("failed to trigger action: %v", err)
+	}
+	defer func() { _ = actionResp.Body.Close() }()
+
+	if actionResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK for action, got %d", actionResp.StatusCode)
+	}
+
+	// 6. POST /api/test/devices/{ieee}/telemetry
+	batt := uint8(85)
+	volt := uint16(2950)
+	telemetryPayload := map[string]interface{}{
+		"battery": batt,
+		"voltage": volt,
+	}
+	telemetryBody, _ := json.Marshal(telemetryPayload)
+	telemetryResp, err := http.Post(fmt.Sprintf("%s/api/test/devices/%s/telemetry", baseURL, testIEEE), "application/json", bytes.NewBuffer(telemetryBody))
+	if err != nil {
+		t.Fatalf("failed to report telemetry: %v", err)
+	}
+	defer func() { _ = telemetryResp.Body.Close() }()
+
+	if telemetryResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK for telemetry, got %d", telemetryResp.StatusCode)
+	}
+
+	// Check device telemetry was updated
+	vdev, ok := ctrl.GetVirtualDevice(testIEEE)
+	if !ok {
+		t.Fatalf("expected virtual device to exist")
+	}
+	if vdev.GetState()["battery"] != batt {
+		t.Errorf("expected battery %d, got %v", batt, vdev.GetState()["battery"])
+	}
+}

@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math/rand"
 	"net"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -161,6 +163,14 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/bindings", s.handleDeleteBinding)
 	mux.HandleFunc("GET /api/ai/recommendations", s.handleGetRecommendations)
 	mux.HandleFunc("POST /api/ai/recommendations/{id}/apply", s.handleApplyRecommendation)
+
+	// Simulation Lab APIs (Mock mode testing)
+	mux.HandleFunc("GET /api/test/status", s.handleTestStatus)
+	mux.HandleFunc("GET /api/test/definitions", s.handleGetDefinitions)
+	mux.HandleFunc("GET /api/test/devices", s.handleGetVirtualDevices)
+	mux.HandleFunc("POST /api/test/devices", s.handleSpawnVirtualDevice)
+	mux.HandleFunc("POST /api/test/devices/{ieee}/action", s.handleVirtualDeviceAction)
+	mux.HandleFunc("POST /api/test/devices/{ieee}/telemetry", s.handleVirtualDeviceTelemetry)
 
 	// WebSocket live stream
 	mux.HandleFunc("GET /api/events", s.handleWebSocket)
@@ -402,3 +412,315 @@ func (s *Server) eventBroadcasterLoop() {
 		}
 	}
 }
+
+// Simulation Lab Handlers
+
+// DefinitionSummary provides device definition overview for simulation UI.
+type DefinitionSummary struct {
+	Model          string   `json:"model"`
+	Vendor         string   `json:"vendor"`
+	Description    string   `json:"description"`
+	ZigbeeModels   []string `json:"zigbee_models"`
+	Actions        []string `json:"actions"`
+	HasBattery     bool     `json:"has_battery"`
+	HasTemperature bool     `json:"has_temperature"`
+	HasHumidity    bool     `json:"has_humidity"`
+}
+
+// VirtualDeviceSummary provides virtual device runtime overview for simulation UI.
+type VirtualDeviceSummary struct {
+	IEEE           string                 `json:"ieee"`
+	NWK            uint16                 `json:"nwk"`
+	Model          string                 `json:"model"`
+	Vendor         string                 `json:"vendor"`
+	Description    string                 `json:"description"`
+	State          map[string]interface{} `json:"state"`
+	Actions        []string               `json:"actions"`
+	HasBattery     bool                   `json:"has_battery"`
+	HasTemperature bool                   `json:"has_temperature"`
+	HasHumidity    bool                   `json:"has_humidity"`
+}
+
+// SpawnDevicePayload describes parameters to instantiate a virtual device.
+type SpawnDevicePayload struct {
+	Model string `json:"model"`
+	IEEE  string `json:"ieee,omitempty"`
+	NWK   uint16 `json:"nwk,omitempty"`
+}
+
+// VirtualTelemetryPayload describes telemetry simulation inputs.
+type VirtualTelemetryPayload struct {
+	Battery     *uint8   `json:"battery,omitempty"`
+	Voltage     *uint16  `json:"voltage,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty"`
+	Humidity    *float64 `json:"humidity,omitempty"`
+}
+
+func (s *Server) handleTestStatus(w http.ResponseWriter, r *http.Request) {
+	vdevs := s.controller.GetVirtualDevices()
+	count := 0
+	if vdevs != nil {
+		count = len(vdevs)
+	}
+	defCount := 0
+	if s.controller.Fixtures() != nil {
+		defCount = len(s.controller.Fixtures().List())
+	}
+	adapterType := "hardware"
+	if s.controller.IsSimulationSupported() {
+		adapterType = "mock"
+	}
+	resp := map[string]interface{}{
+		"supported":              s.controller.IsSimulationSupported(),
+		"adapter":                adapterType,
+		"devices":                count,
+		"active_virtual_devices": count,
+		"definitions":            defCount,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (s *Server) handleGetDefinitions(w http.ResponseWriter, r *http.Request) {
+	if s.controller.Fixtures() == nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]DefinitionSummary{})
+		return
+	}
+
+	defs := s.controller.Fixtures().List()
+	res := make([]DefinitionSummary, len(defs))
+	for i, d := range defs {
+		actions := make([]string, 0, len(d.Device.Simulations.Actions))
+		for a := range d.Device.Simulations.Actions {
+			actions = append(actions, a)
+		}
+		sort.Strings(actions)
+
+		_, hasBatt := d.Device.Simulations.Telemetry["battery"]
+		_, hasTemp := d.Device.Simulations.Telemetry["temperature"]
+		_, hasHum := d.Device.Simulations.Telemetry["humidity"]
+
+		res[i] = DefinitionSummary{
+			Model:          d.Device.Model,
+			Vendor:         d.Device.Vendor,
+			Description:    d.Device.Description,
+			ZigbeeModels:   d.Device.ZigbeeModels,
+			Actions:        actions,
+			HasBattery:     hasBatt,
+			HasTemperature: hasTemp,
+			HasHumidity:    hasHum,
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(res)
+}
+
+func (s *Server) handleGetVirtualDevices(w http.ResponseWriter, r *http.Request) {
+	vdevs := s.controller.GetVirtualDevices()
+	if vdevs == nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]VirtualDeviceSummary{})
+		return
+	}
+
+	res := make([]VirtualDeviceSummary, len(vdevs))
+	for i, v := range vdevs {
+		def := v.Def
+		actions := make([]string, 0, len(def.Device.Simulations.Actions))
+		for a := range def.Device.Simulations.Actions {
+			actions = append(actions, a)
+		}
+		sort.Strings(actions)
+
+		_, hasBatt := def.Device.Simulations.Telemetry["battery"]
+		_, hasTemp := def.Device.Simulations.Telemetry["temperature"]
+		_, hasHum := def.Device.Simulations.Telemetry["humidity"]
+
+		res[i] = VirtualDeviceSummary{
+			IEEE:           v.IEEE,
+			NWK:            v.NWK,
+			Model:          def.Device.Model,
+			Vendor:         def.Device.Vendor,
+			Description:    def.Device.Description,
+			State:          v.GetState(),
+			Actions:        actions,
+			HasBattery:     hasBatt,
+			HasTemperature: hasTemp,
+			HasHumidity:    hasHum,
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(res)
+}
+
+func (s *Server) handleSpawnVirtualDevice(w http.ResponseWriter, r *http.Request) {
+	if !s.controller.IsSimulationSupported() {
+		http.Error(w, `{"error":"simulation not supported on current adapter"}`, http.StatusBadRequest)
+		return
+	}
+
+	var body SpawnDevicePayload
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	if body.Model == "" {
+		http.Error(w, `{"error":"missing model in request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	if s.controller.Fixtures() == nil {
+		http.Error(w, `{"error":"no fixture registry loaded"}`, http.StatusInternalServerError)
+		return
+	}
+
+	def, ok := s.controller.Fixtures().Get(body.Model)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("fixture definition for model '%s' not found", body.Model)})
+		return
+	}
+
+	ieee := body.IEEE
+	if ieee == "" {
+		ieee = fmt.Sprintf("0x00124b%010x", rand.Uint64()&0xffffffffff)
+	}
+	nwk := body.NWK
+	if nwk == 0 {
+		nwk = uint16(rand.Intn(0xff00) + 0x0010)
+	}
+
+	vdev, err := s.controller.SpawnVirtualDevice(def, ieee, nwk)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	if err := vdev.SimulateJoin(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to simulate join: %v", err)})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"ieee":    ieee,
+		"nwk":     nwk,
+		"model":   def.Device.Model,
+		"vendor":  def.Device.Vendor,
+	})
+}
+
+func (s *Server) handleVirtualDeviceAction(w http.ResponseWriter, r *http.Request) {
+	ieee := r.PathValue("ieee")
+	if ieee == "" {
+		http.Error(w, `{"error":"missing ieee path parameter"}`, http.StatusBadRequest)
+		return
+	}
+
+	vdev, ok := s.controller.GetVirtualDevice(ieee)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "virtual device not found"})
+		return
+	}
+
+	var body struct {
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	if body.Action == "" {
+		http.Error(w, `{"error":"action cannot be empty"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := vdev.TriggerAction(body.Action); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"action":  body.Action,
+		"state":   vdev.GetState(),
+	})
+}
+
+func (s *Server) handleVirtualDeviceTelemetry(w http.ResponseWriter, r *http.Request) {
+	ieee := r.PathValue("ieee")
+	if ieee == "" {
+		http.Error(w, `{"error":"missing ieee path parameter"}`, http.StatusBadRequest)
+		return
+	}
+
+	vdev, ok := s.controller.GetVirtualDevice(ieee)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "virtual device not found"})
+		return
+	}
+
+	var body VirtualTelemetryPayload
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	if body.Battery != nil || body.Voltage != nil {
+		batt := uint8(100)
+		volt := uint16(3000)
+		if body.Battery != nil {
+			batt = *body.Battery
+		}
+		if body.Voltage != nil {
+			volt = *body.Voltage
+		}
+		if err := vdev.ReportBattery(batt, volt); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+	}
+
+	if body.Temperature != nil || body.Humidity != nil {
+		temp := 20.0
+		hum := 50.0
+		if body.Temperature != nil {
+			temp = *body.Temperature
+		}
+		if body.Humidity != nil {
+			hum = *body.Humidity
+		}
+		if err := vdev.ReportTemperatureHumidity(temp, hum); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"state":   vdev.GetState(),
+	})
+}
+

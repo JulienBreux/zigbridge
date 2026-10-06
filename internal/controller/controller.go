@@ -714,6 +714,12 @@ func (c *Controller) Fixtures() *fixture.Registry {
 	return c.fixtures
 }
 
+// IsSimulationSupported returns whether the active adapter supports virtual device simulations.
+func (c *Controller) IsSimulationSupported() bool {
+	_, ok := c.adapter.(VirtualDeviceManager)
+	return ok
+}
+
 // SpawnVirtualDevice creates and registers a virtual device if the adapter supports it.
 func (c *Controller) SpawnVirtualDevice(def *fixture.DeviceDefinition, ieee string, nwk uint16) (*fixture.VirtualDevice, error) {
 	if vdm, ok := c.adapter.(VirtualDeviceManager); ok {
