@@ -1,6 +1,7 @@
 package controller_test
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,11 +17,10 @@ import (
 	"github.com/julienbreux/zigbridge/internal/zcl"
 )
 
-func setupTestController(t *testing.T) (*controller.Controller, *mock.MockAdapter, *mqtt.MockClient) {
-	cfg := config.Default()
-	cfg.Storage.DevicesPath = filepath.Join(t.TempDir(), "devices.yaml")
-	cfg.MQTT.Enabled = true
-
+func setupTestControllerWithConfig(t *testing.T, cfg *config.Config) (*controller.Controller, *mock.MockAdapter, *mqtt.MockClient) {
+	if cfg.Storage.DevicesPath == "" || cfg.Storage.DevicesPath == "data/devices.yaml" {
+		cfg.Storage.DevicesPath = filepath.Join(t.TempDir(), "devices.yaml")
+	}
 	mockTrans, _ := transport.NewMockTransport()
 	mockAdp := mock.New(20, 0x1A62)
 	mockMQTT := mqtt.NewMockClient()
@@ -30,6 +30,13 @@ func setupTestController(t *testing.T) (*controller.Controller, *mock.MockAdapte
 		_ = ctrl.Stop()
 	})
 	return ctrl, mockAdp, mockMQTT
+}
+
+func setupTestController(t *testing.T) (*controller.Controller, *mock.MockAdapter, *mqtt.MockClient) {
+	cfg := config.Default()
+	cfg.Storage.DevicesPath = filepath.Join(t.TempDir(), "devices.yaml")
+	cfg.MQTT.Enabled = true
+	return setupTestControllerWithConfig(t, cfg)
 }
 
 func TestControllerLifecycleAndStatus(t *testing.T) {
@@ -46,6 +53,9 @@ func TestControllerLifecycleAndStatus(t *testing.T) {
 	}
 	if status.Coordinator.Channel != 20 {
 		t.Errorf("expected channel 20, got %d", status.Coordinator.Channel)
+	}
+	if status.AIEnabled {
+		t.Error("expected AIEnabled to be false by default")
 	}
 
 	if err := ctrl.Stop(); err != nil {
@@ -144,9 +154,48 @@ func TestControllerIncomingFrameAndMQTT(t *testing.T) {
 		t.Error("expected MQTT state message for device")
 	}
 
-	// Verify telemetry recorded in AI EventCollector
+	// Verify telemetry is NOT recorded in AI EventCollector when AI is disabled
+	if ctrl.EventCollector().Count() != 0 {
+		t.Errorf("expected 0 telemetry events in collector when AI is disabled, got %d", ctrl.EventCollector().Count())
+	}
+}
+
+func TestControllerIncomingFrameWithAIEnabled(t *testing.T) {
+	cfg := config.Default()
+	cfg.Storage.DevicesPath = filepath.Join(t.TempDir(), "devices.yaml")
+	cfg.MQTT.Enabled = true
+	cfg.AI.Enabled = true
+
+	ctrl, mockAdp, _ := setupTestControllerWithConfig(t, cfg)
+	ctx := t.Context()
+	_ = ctrl.Start(ctx)
+
+	mockAdp.EmitDeviceJoin(adapter.DeviceJoinInfo{
+		IEEE: "0x00158D0001",
+		NWK:  0x1234,
+	})
+	time.Sleep(50 * time.Millisecond)
+
+	reportPayload := []byte{0x00, 0x00, zcl.TypeBoolean, 0x01}
+	frame := &zcl.Frame{
+		Header: zcl.FrameControl{
+			Type:      zcl.FrameTypeGlobal,
+			Direction: zcl.DirectionServerToClient,
+		},
+		ClusterID:              zcl.ClusterOnOff,
+		CommandID:              zcl.CmdReportAttributes,
+		SourceAddress:          "0x00158D0001",
+		SourceEndpoint:         1,
+		LQI:                    180,
+		Payload:                reportPayload,
+		TransactionSequenceNum: 1,
+	}
+
+	mockAdp.EmitFrame(frame)
+	time.Sleep(50 * time.Millisecond)
+
 	if ctrl.EventCollector().Count() < 1 {
-		t.Errorf("expected at least 1 telemetry event in collector, got %d", ctrl.EventCollector().Count())
+		t.Errorf("expected at least 1 telemetry event in collector when AI enabled, got %d", ctrl.EventCollector().Count())
 	}
 }
 
@@ -194,7 +243,12 @@ func TestControllerOptimisticDirectBinding(t *testing.T) {
 }
 
 func TestControllerOnDemandRecommendations(t *testing.T) {
-	ctrl, mockAdp, _ := setupTestController(t)
+	cfg := config.Default()
+	cfg.Storage.DevicesPath = filepath.Join(t.TempDir(), "devices.yaml")
+	cfg.MQTT.Enabled = true
+	cfg.AI.Enabled = true
+
+	ctrl, mockAdp, _ := setupTestControllerWithConfig(t, cfg)
 	ctx := t.Context()
 	_ = ctrl.Start(ctx)
 
@@ -223,6 +277,31 @@ func TestControllerOnDemandRecommendations(t *testing.T) {
 		if len(ctrl.GetBindings()) != 1 {
 			t.Errorf("expected 1 direct binding created by applied recommendation, got %d", len(ctrl.GetBindings()))
 		}
+	}
+}
+
+func TestControllerAIDisabled(t *testing.T) {
+	ctrl, _, _ := setupTestController(t) // Default has AI.Enabled = false
+	ctx := t.Context()
+	_ = ctrl.Start(ctx)
+
+	if ctrl.Status().AIEnabled {
+		t.Error("expected AIEnabled to be false in controller status")
+	}
+
+	// Recommendations should return ErrAIDisabled
+	recs, err := ctrl.GetRecommendations(ctx)
+	if !errors.Is(err, controller.ErrAIDisabled) {
+		t.Errorf("expected ErrAIDisabled from GetRecommendations, got: %v", err)
+	}
+	if recs != nil {
+		t.Errorf("expected nil recommendations, got: %v", recs)
+	}
+
+	// Applying recommendation should return ErrAIDisabled
+	err = ctrl.ApplyRecommendation(ctx, "rec-123")
+	if !errors.Is(err, controller.ErrAIDisabled) {
+		t.Errorf("expected ErrAIDisabled from ApplyRecommendation, got: %v", err)
 	}
 }
 

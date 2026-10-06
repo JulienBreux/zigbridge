@@ -23,9 +23,10 @@ import (
 	"github.com/julienbreux/zigbridge/internal/zcl"
 )
 
-func setupTestServer(t *testing.T) (*web.Server, *controller.Controller, string) {
-	cfg := config.Default()
-	cfg.Storage.DevicesPath = filepath.Join(t.TempDir(), "devices.yaml")
+func setupTestServerWithConfig(t *testing.T, cfg *config.Config) (*web.Server, *controller.Controller, string) {
+	if cfg.Storage.DevicesPath == "" || cfg.Storage.DevicesPath == "data/devices.yaml" {
+		cfg.Storage.DevicesPath = filepath.Join(t.TempDir(), "devices.yaml")
+	}
 	cfg.Web.ListenAddr = "127.0.0.1:0" // Random available port
 
 	mockTrans, _ := transport.NewMockTransport()
@@ -54,6 +55,11 @@ func setupTestServer(t *testing.T) (*web.Server, *controller.Controller, string)
 	})
 
 	return srv, ctrl, baseURL
+}
+
+func setupTestServer(t *testing.T) (*web.Server, *controller.Controller, string) {
+	cfg := config.Default()
+	return setupTestServerWithConfig(t, cfg)
 }
 
 func TestWebStaticAssets(t *testing.T) {
@@ -95,6 +101,9 @@ func TestWebAPIStatus(t *testing.T) {
 
 	if status.Coordinator.Channel != 15 {
 		t.Errorf("expected channel 15, got %d", status.Coordinator.Channel)
+	}
+	if status.AIEnabled {
+		t.Error("expected AIEnabled to be false in API status")
 	}
 }
 
@@ -227,7 +236,9 @@ func TestWebAPIBindings(t *testing.T) {
 }
 
 func TestWebAPIRecommendationsAndApply(t *testing.T) {
-	_, ctrl, baseURL := setupTestServer(t)
+	cfg := config.Default()
+	cfg.AI.Enabled = true
+	_, ctrl, baseURL := setupTestServerWithConfig(t, cfg)
 
 	// Register compatible switch and bulb
 	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{IEEE: "0x00158D0001", NWK: 0x1001})
@@ -271,6 +282,40 @@ func TestWebAPIRecommendationsAndApply(t *testing.T) {
 
 	if len(ctrl.GetBindings()) != 1 {
 		t.Errorf("expected 1 binding created from recommendation, got %d", len(ctrl.GetBindings()))
+	}
+}
+
+func TestWebAPIRecommendationsDisabled(t *testing.T) {
+	_, _, baseURL := setupTestServer(t) // Default has AI.Enabled = false
+
+	// GET /api/ai/recommendations should return 403 Forbidden
+	recResp, err := http.Get(baseURL + "/api/ai/recommendations")
+	if err != nil {
+		t.Fatalf("failed to get recommendations: %v", err)
+	}
+	defer func() { _ = recResp.Body.Close() }()
+
+	if recResp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden, got %d", recResp.StatusCode)
+	}
+
+	var errBody map[string]string
+	if err := json.NewDecoder(recResp.Body).Decode(&errBody); err != nil {
+		t.Fatalf("failed to decode error body: %v", err)
+	}
+	if errBody["error"] == "" {
+		t.Error("expected non-empty error message")
+	}
+
+	// POST /api/ai/recommendations/{id}/apply should return 403 Forbidden
+	applyResp, err := http.Post(baseURL+"/api/ai/recommendations/rec-123/apply", "application/json", bytes.NewBuffer(nil))
+	if err != nil {
+		t.Fatalf("failed to post apply: %v", err)
+	}
+	defer func() { _ = applyResp.Body.Close() }()
+
+	if applyResp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden on apply, got %d", applyResp.StatusCode)
 	}
 }
 

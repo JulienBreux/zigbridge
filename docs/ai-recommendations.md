@@ -22,17 +22,17 @@ Zigbridge maintains a thread-safe, bounded circular buffer in memory (`max_event
 - State changes (e.g., light bulb on/off transitions).
 - Discovered device clusters and endpoints.
 
-Because the buffer is bounded, memory usage remains strictly capped at a few kilobytes regardless of how long Zigbridge runs.
+Because the buffer is bounded, memory usage remains strictly capped at a few kilobytes regardless of how long Zigbridge runs. When disabled, telemetry recording is skipped entirely to maintain zero heap allocations per radio frame.
 
 ---
 
-## 2. Recommendation Engines
+## 2. Enabling and Configuring Recommendations
 
-You can configure the analyzer engine in `config.yaml`:
+By default, the AI recommendation engine and telemetry collection are **disabled** (`enabled: false`) to minimize resident memory and idle processing. To activate the feature and reveal the **Smart Suggestions** tab in the Web Dashboard, enable it in `data/config.yaml`:
 
 ```yaml
 ai:
-  enabled: true
+  enabled: true              # Disabled by default; set to true to enable
   engine: rule_based         # Options: "rule_based" or "external_llm"
   min_confidence: 0.75       # Filter proposals below this confidence (0.0 to 1.0)
   max_event_history: 2000

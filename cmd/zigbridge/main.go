@@ -161,6 +161,8 @@ func main() {
 			log.Printf("[AI] Configured rule-based direct binding recommendation engine (confidence threshold: %.2f)",
 				cfg.AI.MinConfidence)
 		}
+	} else {
+		log.Printf("[AI] AI telemetry collection and recommendation engine are disabled (enable via ai.enabled in config)")
 	}
 
 	// 6. Forward bridge events to logger

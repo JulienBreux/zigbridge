@@ -330,7 +330,11 @@ func (s *Server) handleGetRecommendations(w http.ResponseWriter, r *http.Request
 	recs, err := s.controller.GetRecommendations(r.Context())
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
+		if errors.Is(err, controller.ErrAIDisabled) {
+			w.WriteHeader(http.StatusForbidden)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
@@ -348,7 +352,11 @@ func (s *Server) handleApplyRecommendation(w http.ResponseWriter, r *http.Reques
 
 	if err := s.controller.ApplyRecommendation(r.Context(), recID); err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
+		if errors.Is(err, controller.ErrAIDisabled) {
+			w.WriteHeader(http.StatusForbidden)
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}

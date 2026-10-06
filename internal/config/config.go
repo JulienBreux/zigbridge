@@ -303,7 +303,7 @@ func Default() *Config {
 			EnableCORS: true,
 		},
 		AI: AIConfig{
-			Enabled:          true,
+			Enabled:          false,
 			Engine:           "rule_based",
 			AnalysisInterval: 5 * time.Minute,
 			MinConfidence:    0.75,

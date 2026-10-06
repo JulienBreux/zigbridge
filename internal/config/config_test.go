@@ -74,6 +74,39 @@ mqtt:
 	if cfg.MQTT.Enabled != false {
 		t.Errorf("expected mqtt enabled false, got %v", cfg.MQTT.Enabled)
 	}
+
+	if cfg.AI.Enabled != false {
+		t.Errorf("expected default AI.Enabled false, got %v", cfg.AI.Enabled)
+	}
+}
+
+func TestLoadConfigAIEnabled(t *testing.T) {
+	yamlContent := `
+ai:
+  enabled: true
+  engine: external_llm
+  llm_endpoint: "http://localhost:11434/v1/chat/completions"
+`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("failed to write temp config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("unexpected error loading config: %v", err)
+	}
+
+	if !cfg.AI.Enabled {
+		t.Errorf("expected AI.Enabled true, got false")
+	}
+	if cfg.AI.Engine != "external_llm" {
+		t.Errorf("expected AI.Engine external_llm, got %s", cfg.AI.Engine)
+	}
+	if cfg.AI.LLMEndpoint != "http://localhost:11434/v1/chat/completions" {
+		t.Errorf("expected LLMEndpoint set, got %s", cfg.AI.LLMEndpoint)
+	}
 }
 
 func TestConfigValidationErrors(t *testing.T) {

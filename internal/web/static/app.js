@@ -177,6 +177,20 @@ async function loadStatus() {
       }
     }
 
+    // Show Smart Suggestions tab if AI feature is enabled
+    const aiTabBtn = document.getElementById('tab-btn-ai');
+    if (aiTabBtn) {
+      if (data.ai_enabled) {
+        aiTabBtn.style.display = 'inline-flex';
+      } else {
+        aiTabBtn.style.display = 'none';
+        const activeAiTab = document.querySelector('.tab-btn.active[data-tab="ai"]');
+        if (activeAiTab) {
+          switchTab('devices');
+        }
+      }
+    }
+
     // Permit join countdown
     updatePermitJoinDisplay(data.permit_join_remaining || 0);
 
@@ -616,6 +630,10 @@ async function runAIAnalysis() {
 
   try {
     const res = await fetch('/api/ai/recommendations');
+    if (res.status === 403) {
+      container.innerHTML = `<div class="card" style="padding:16px; color:var(--text-secondary);">The AI recommendation engine is currently disabled in configuration (<code>ai.enabled: false</code>).</div>`;
+      return;
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const recs = await res.json() || [];
     renderRecommendations(recs);

@@ -3,6 +3,7 @@ package controller
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -27,6 +28,9 @@ type VirtualDeviceManager interface {
 	GetVirtualDevice(ieee string) (*fixture.VirtualDevice, bool)
 }
 
+// ErrAIDisabled indicates the AI recommendation engine is disabled in configuration.
+var ErrAIDisabled = errors.New("ai recommendation engine is disabled in configuration")
+
 // BridgeStatus reports high-level metrics and coordinator state.
 type BridgeStatus struct {
 	Connected           bool                `json:"connected"`
@@ -37,6 +41,7 @@ type BridgeStatus struct {
 	PermitJoinRemaining uint8               `json:"permit_join_remaining"`
 	MQTTConnected       bool                `json:"mqtt_connected"`
 	UptimeSeconds       int64               `json:"uptime_seconds"`
+	AIEnabled           bool                `json:"ai_enabled"`
 }
 
 // Controller coordinates the transport, radio adapter, device registry,
@@ -420,19 +425,21 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 		friendlyName = dev.FriendlyName
 	}
 
-	// Record telemetry event in AI bounded ring buffer
-	c.collector.Record(ai.DeviceEvent{
-		ID:           fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		Timestamp:    time.Now().UTC(),
-		IEEE:         frame.SourceAddress,
-		FriendlyName: friendlyName,
-		Endpoint:     frame.SourceEndpoint,
-		ClusterID:    frame.ClusterID,
-		ClusterName:  frame.ClusterID.String(),
-		CommandID:    frame.CommandID,
-		Value:        stateUpdates,
-		EventType:    "attribute_report",
-	})
+	// Record telemetry event in AI bounded ring buffer if enabled
+	if c.cfg.AI.Enabled && c.collector != nil {
+		c.collector.Record(ai.DeviceEvent{
+			ID:           fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+			Timestamp:    time.Now().UTC(),
+			IEEE:         frame.SourceAddress,
+			FriendlyName: friendlyName,
+			Endpoint:     frame.SourceEndpoint,
+			ClusterID:    frame.ClusterID,
+			ClusterName:  frame.ClusterID.String(),
+			CommandID:    frame.CommandID,
+			Value:        stateUpdates,
+			EventType:    "attribute_report",
+		})
+	}
 
 	// Publish state update to MQTT
 	if c.cfg.MQTT.Enabled && c.mqtt != nil && c.mqtt.IsConnected() && len(stateUpdates) > 0 {
@@ -551,6 +558,10 @@ func (c *Controller) RemoveDirectBinding(ctx context.Context, req adapter.BindRe
 
 // GetRecommendations inspects topology and historical events on-demand to propose bindings and scenes.
 func (c *Controller) GetRecommendations(ctx context.Context) ([]ai.Recommendation, error) {
+	if !c.cfg.AI.Enabled {
+		return nil, ErrAIDisabled
+	}
+
 	devices := c.devices.GetAll()
 	snapshots := make([]ai.DeviceSnapshot, len(devices))
 	for i, d := range devices {
@@ -593,6 +604,10 @@ func (c *Controller) GetRecommendations(ctx context.Context) ([]ai.Recommendatio
 
 // ApplyRecommendation executes an actionable recommendation (e.g. creating the direct binding).
 func (c *Controller) ApplyRecommendation(ctx context.Context, recID string) error {
+	if !c.cfg.AI.Enabled {
+		return ErrAIDisabled
+	}
+
 	c.mu.Lock()
 	var targetRec *ai.Recommendation
 	for i := range c.cachedRecs {
@@ -656,6 +671,7 @@ func (c *Controller) Status() BridgeStatus {
 		PermitJoinRemaining: uint8(c.permitJoinRemaining.Load()),
 		MQTTConnected:       mqConnected,
 		UptimeSeconds:       uptime,
+		AIEnabled:           c.cfg.AI.Enabled,
 	}
 }
 

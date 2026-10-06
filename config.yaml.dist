@@ -106,8 +106,8 @@ web:
 # AI Telemetry Logger & On-Demand Recommendation Engine
 # ------------------------------------------------------------------------------
 ai:
-  # Enable telemetry event buffer and smart binding recommendations
-  enabled: true
+  # Enable telemetry event buffer and smart binding recommendations (disabled by default)
+  enabled: false
 
   # Engine type:
   # - "rule_based": Fast, offline heuristics based on traffic and cluster types
