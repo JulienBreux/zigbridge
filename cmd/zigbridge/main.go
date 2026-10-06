@@ -43,6 +43,11 @@ const banner = `
 `
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "fixture" {
+		handleFixtureCommand(os.Args[2:])
+		return
+	}
+
 	configPath := flag.String("config", "", "Path to YAML configuration file (default: data/config.yaml or config.yaml)")
 	logLevel := flag.String("log-level", "", "Override logging level (debug, info, warn, error)")
 	showVersion := flag.Bool("version", false, "Display version and build information")
