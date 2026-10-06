@@ -215,14 +215,14 @@ func (t *TCPTransport) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// filterRFC2217 strips Telnet IAC command byte sequences (0xFF ...) from SLZB-06 stream
-// so they do not contaminate the underlying ZCL / Z-Stack framing.
+// filterRFC2217 strips Telnet IAC command byte sequences (0xFF ...) from stream
+// while preserving valid binary payload bytes containing 0xFF.
 func (t *TCPTransport) filterRFC2217(buf []byte) int {
 	outIdx := 0
 	i := 0
 	for i < len(buf) {
 		b := buf[i]
-		if b == 0xFF { // Telnet IAC (Interpret As Command)
+		if b == 0xFF { // Possible Telnet IAC (Interpret As Command)
 			if i+1 < len(buf) {
 				cmd := buf[i+1]
 				if cmd == 0xFF {
@@ -239,14 +239,23 @@ func (t *TCPTransport) filterRFC2217(buf []byte) int {
 						i += 3
 						continue
 					}
-					// Partial sequence at boundary: skip remaining
-					break
+					// Partial negotiation command at boundary: retain byte
+					buf[outIdx] = b
+					outIdx++
+					i++
+					continue
 				}
-				// 2-byte command
-				i += 2
+				// If not followed by standard Telnet verb, treat 0xFF as binary payload data
+				buf[outIdx] = b
+				outIdx++
+				i++
 				continue
 			}
-			break
+			// Single 0xFF byte at boundary: retain as binary payload data
+			buf[outIdx] = b
+			outIdx++
+			i++
+			continue
 		}
 		buf[outIdx] = b
 		outIdx++

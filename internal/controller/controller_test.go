@@ -615,4 +615,92 @@ func TestVirtualA7ZSimulation(t *testing.T) {
 	}
 }
 
+func TestDeviceRegistryDualLookupAndInterview(t *testing.T) {
+	reg := controller.NewDeviceRegistry()
+	dev := &controller.Device{
+		IEEE:         "0x00124B0001020304",
+		NWK:          0x4321,
+		FriendlyName: "Living Room Plug",
+		Endpoints:    []uint16{1},
+		State:        make(map[string]interface{}),
+	}
+	reg.Upsert(dev)
+
+	// Test lookup by IEEE
+	d, ok := reg.Get("0x00124B0001020304")
+	if !ok || d.IEEE != dev.IEEE {
+		t.Fatalf("failed to get device by IEEE")
+	}
+
+	// Test lookup by friendly name
+	d, ok = reg.Get("Living Room Plug")
+	if !ok || d.IEEE != dev.IEEE {
+		t.Fatalf("failed to get device by FriendlyName")
+	}
+
+	// Test lookup by NWK hex
+	d, ok = reg.Get("0x4321")
+	if !ok || d.IEEE != dev.IEEE {
+		t.Fatalf("failed to get device by NWK hex 0x4321")
+	}
+
+	d, ok = reg.Get("4321")
+	if !ok || d.IEEE != dev.IEEE {
+		t.Fatalf("failed to get device by NWK hex 4321")
+	}
+
+	// Test controller handling of CmdReadAttributesResponse
+	cfg := config.Default()
+	cfg.Storage.DevicesPath = "" // in-memory
+	mockTrans, _ := transport.NewMockTransport()
+	mockAdp := mock.New(20, 0x1A62)
+	mockMQTT := mqtt.NewMockClient()
+
+	ctrl := controller.New(cfg, mockTrans, mockAdp, mockMQTT)
+	ctx := context.Background()
+	_ = ctrl.Start(ctx)
+	defer func() { _ = ctrl.Stop() }()
+
+	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{
+		IEEE: "0x00124B000A7Z0001",
+		NWK:  0xA701,
+	})
+
+	// Send CmdReadAttributesResponse for ClusterBasic
+	// Attr 0x0004 = "Nous", Attr 0x0005 = "A7Z"
+	readPayload := []byte{
+		0x04, 0x00, 0x00, 0x42, 0x04, 'N', 'o', 'u', 's',
+		0x05, 0x00, 0x00, 0x42, 0x03, 'A', '7', 'Z',
+	}
+
+	ctrl.HandleIncomingFrame(&zcl.Frame{
+		Header: zcl.FrameControl{
+			Type:                   zcl.FrameTypeGlobal,
+			ManufacturerSpecific:   false,
+			Direction:              zcl.DirectionServerToClient,
+			DisableDefaultResponse: true,
+		},
+		ClusterID:              zcl.ClusterBasic,
+		CommandID:              zcl.CmdReadAttributesResponse,
+		SourceAddress:          "0xA701",
+		DestAddress:            "0x0000",
+		SourceEndpoint:         1,
+		DestEndpoint:           1,
+		Payload:                readPayload,
+		LQI:                    255,
+	})
+
+	joinedDev, ok := ctrl.GetDevice("0x00124B000A7Z0001")
+	if !ok {
+		t.Fatalf("expected joined device to be found")
+	}
+	if joinedDev.Manufacturer != "Nous" {
+		t.Errorf("expected manufacturer Nous, got %s", joinedDev.Manufacturer)
+	}
+	if joinedDev.Model != "A7Z" {
+		t.Errorf("expected model A7Z, got %s", joinedDev.Model)
+	}
+}
+
+
 

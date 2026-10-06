@@ -1,11 +1,15 @@
 package zstack
 
 import (
+	"bufio"
 	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,14 +35,25 @@ const (
 	TypeSRSP byte = 0x60
 
 	// Commands
+	CmdSYSPing              uint16 = 0x2101
+	CmdSYSPingRsp           uint16 = 0x6101
 	CmdSYSResetReq          uint16 = 0x4100
+	CmdSYSResetInd          uint16 = 0x4180
 	CmdSYSVersion           uint16 = 0x2102
+	CmdSYSVersionRsp        uint16 = 0x6102
+	CmdUTILGetDeviceInfo    uint16 = 0x2700
+	CmdUTILGetDeviceInfoRsp uint16 = 0x6700
+	CmdUTILPermitJoinReq    uint16 = 0x270B
+	CmdUTILPermitJoinRsp    uint16 = 0x670B
 	CmdZDOMgmtPermitJoinReq uint16 = 0x2536
+	CmdZDOMgmtPermitJoinRsp uint16 = 0x6536
+	CmdZDOTCDevInd          uint16 = 0x45CA
+	CmdZDOEndDeviceAnnceInd uint16 = 0x45C1
 	CmdZDOBindReq           uint16 = 0x2521
 	CmdZDOUnbindReq         uint16 = 0x2522
 	CmdAFDataRequest        uint16 = 0x2401
+	CmdAFDataRequestRsp     uint16 = 0x6401
 	CmdAFIncomingMsg        uint16 = 0x4481
-	CmdZDOEndDeviceAnnceInd uint16 = 0x45C1
 )
 
 var (
@@ -77,6 +92,9 @@ type ZStackAdapter struct {
 	frameHandler adapter.FrameHandler
 	joinHandler  adapter.DeviceJoinHandler
 
+	nwkToIEEE map[uint16]string
+	ieeeToNWK map[string]uint16
+
 	cancel context.CancelFunc
 }
 
@@ -92,6 +110,8 @@ func New(channel uint8, panID uint16, extPanID string) *ZStackAdapter {
 			IEEE:     "0x00124B001F00ABCD",
 			Status:   "ready",
 		},
+		nwkToIEEE: make(map[uint16]string),
+		ieeeToNWK: make(map[string]uint16),
 	}
 }
 
@@ -115,8 +135,14 @@ func (z *ZStackAdapter) Start(ctx context.Context) error {
 
 	go z.readLoop(readCtx)
 
-	// Ping firmware version
-	_ = z.Reset(ctx)
+	// Send non-disruptive queries to coordinator
+	// 1. SYS_PING (0x2101)
+	_ = z.sendFrame(&MTFrame{Cmd0: TypeSREQ | SubsystemSYS, Cmd1: 0x01, Data: nil})
+	// 2. SYS_VERSION (0x2102)
+	_ = z.sendFrame(&MTFrame{Cmd0: TypeSREQ | SubsystemSYS, Cmd1: 0x02, Data: nil})
+	// 3. UTIL_GET_DEVICE_INFO (0x2700)
+	_ = z.sendFrame(&MTFrame{Cmd0: TypeSREQ | SubsystemUTIL, Cmd1: 0x00, Data: nil})
+
 	return nil
 }
 
@@ -148,21 +174,46 @@ func (z *ZStackAdapter) Reset(ctx context.Context) error {
 }
 
 func (z *ZStackAdapter) PermitJoin(ctx context.Context, duration uint8) error {
-	// ZDO_MGMT_PERMIT_JOIN_REQ
-	data := []byte{
-		0x02, // AddrMode: 15-bit broadcast
-		0xFC, 0xFF, // DstAddr: 0xFFFC (all routers and coordinator)
-		duration, // Duration in seconds
-		0x00,     // TCSignificance: 0
+	// 1. UTIL_PERMIT_JOIN_REQ (0x270B) - CC2652 Local Coordinator MAC Layer Permit Join
+	utilFrame := MTFrame{
+		Cmd0: TypeSREQ | SubsystemUTIL,
+		Cmd1: 0x0B,
+		Data: []byte{duration},
+	}
+	if err := z.sendFrame(&utilFrame); err != nil {
+		return fmt.Errorf("util permit join failed: %w", err)
 	}
 
-	frame := MTFrame{
+	// 2. ZDO_MGMT_PERMIT_JOIN_REQ (0x2536) - Broadcast to all routers & coordinator (0xFFFC)
+	// AddrMode: 0x02 (16-bit address), DstAddr: 0xFFFC, Duration: duration, TCSignificance: 0x01
+	zdoBroadcastData := []byte{
+		0x02,       // AddrMode: 16-bit
+		0xFC, 0xFF, // DstAddr: 0xFFFC
+		duration,   // Duration in seconds
+		0x01,       // TCSignificance: 1 (Trust Center Link Key exchange permitted)
+	}
+	zdoBroadcast := MTFrame{
 		Cmd0: TypeSREQ | SubsystemZDO,
 		Cmd1: 0x36,
-		Data: data,
+		Data: zdoBroadcastData,
 	}
+	_ = z.sendFrame(&zdoBroadcast)
 
-	return z.sendFrame(&frame)
+	// 3. ZDO_MGMT_PERMIT_JOIN_REQ (0x2536) - Unicast directly to coordinator (0x0000)
+	zdoUnicastData := []byte{
+		0x02,       // AddrMode: 16-bit
+		0x00, 0x00, // DstAddr: 0x0000
+		duration,   // Duration in seconds
+		0x01,       // TCSignificance: 1
+	}
+	zdoUnicast := MTFrame{
+		Cmd0: TypeSREQ | SubsystemZDO,
+		Cmd1: 0x36,
+		Data: zdoUnicastData,
+	}
+	_ = z.sendFrame(&zdoUnicast)
+
+	return nil
 }
 
 func (z *ZStackAdapter) Bind(ctx context.Context, req adapter.BindRequest) error {
@@ -197,17 +248,46 @@ func (z *ZStackAdapter) sendBindRequest(ctx context.Context, req adapter.BindReq
 	return z.sendFrame(&frame)
 }
 
+func (z *ZStackAdapter) resolveNWK(addr string) uint16 {
+	z.mu.Lock()
+	defer z.mu.Unlock()
+
+	if nwk, ok := z.ieeeToNWK[addr]; ok {
+		return nwk
+	}
+	if nwk, ok := z.ieeeToNWK[strings.ToLower(addr)]; ok {
+		return nwk
+	}
+	if nwk, ok := z.ieeeToNWK[strings.ToUpper(addr)]; ok {
+		return nwk
+	}
+
+	clean := strings.TrimPrefix(strings.ToLower(addr), "0x")
+	if len(clean) <= 4 && len(clean) > 0 {
+		if val, err := strconv.ParseUint(clean, 16, 16); err == nil {
+			return uint16(val)
+		}
+	}
+	return 0x0000
+}
+
 func (z *ZStackAdapter) SendZCL(ctx context.Context, frame *zcl.Frame) error {
 	encodedPayload, err := frame.Encode(nil)
 	if err != nil {
 		return err
 	}
 
+	targetNWK := z.resolveNWK(frame.DestAddress)
+	srcEP := frame.SourceEndpoint
+	if srcEP == 0 {
+		srcEP = 1
+	}
+
 	// AF_DATA_REQUEST: DstAddr(2), DstEP(1), SrcEP(1), ClusterID(2), TransID(1), Options(1), Radius(1), Len(1), Data
 	buf := make([]byte, 10+len(encodedPayload))
-	binary.LittleEndian.PutUint16(buf[0:2], 0x0000) // target NWK
+	binary.LittleEndian.PutUint16(buf[0:2], targetNWK)
 	buf[2] = frame.DestEndpoint
-	buf[3] = frame.SourceEndpoint
+	buf[3] = srcEP
 	binary.LittleEndian.PutUint16(buf[4:6], uint16(frame.ClusterID))
 	buf[6] = frame.TransactionSequenceNum
 	buf[7] = 0x00 // Options
@@ -247,6 +327,7 @@ func (z *ZStackAdapter) sendFrame(frame *MTFrame) error {
 func (z *ZStackAdapter) readLoop(ctx context.Context) {
 	header := make([]byte, 4) // SOF, Len, Cmd0, Cmd1
 	dataBuf := make([]byte, 256)
+	var reader *bufio.Reader
 
 	for {
 		select {
@@ -256,24 +337,30 @@ func (z *ZStackAdapter) readLoop(ctx context.Context) {
 		}
 
 		if z.transport == nil || !z.transport.IsConnected() {
+			reader = nil
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
+		if reader == nil {
+			reader = bufio.NewReaderSize(z.transport, 1024)
+		}
+
 		// Find SOF byte
-		b := make([]byte, 1)
-		_, err := io.ReadFull(z.transport, b)
+		b, err := reader.ReadByte()
 		if err != nil {
-			time.Sleep(50 * time.Millisecond)
+			reader = nil
+			time.Sleep(20 * time.Millisecond)
 			continue
 		}
-		if b[0] != SOF {
+		if b != SOF {
 			continue
 		}
 
 		// Read Len, Cmd0, Cmd1
-		_, err = io.ReadFull(z.transport, header[1:4])
+		_, err = io.ReadFull(reader, header[1:4])
 		if err != nil {
+			reader = nil
 			continue
 		}
 
@@ -287,20 +374,21 @@ func (z *ZStackAdapter) readLoop(ctx context.Context) {
 				dataBuf = make([]byte, length)
 			}
 			data = dataBuf[:length]
-			_, err = io.ReadFull(z.transport, data)
+			_, err = io.ReadFull(reader, data)
 			if err != nil {
+				reader = nil
 				continue
 			}
 		}
 
-		fcsByte := make([]byte, 1)
-		_, err = io.ReadFull(z.transport, fcsByte)
+		fcsByte, err := reader.ReadByte()
 		if err != nil {
+			reader = nil
 			continue
 		}
 
 		expectedFCS := CalculateFCS(byte(length), cmd0, cmd1, data)
-		if fcsByte[0] != expectedFCS {
+		if fcsByte != expectedFCS {
 			continue // Discard frame on CRC error
 		}
 
@@ -312,11 +400,38 @@ func (z *ZStackAdapter) handleIncomingMT(cmd0, cmd1 byte, data []byte) {
 	cmdID := (uint16(cmd0) << 8) | uint16(cmd1)
 
 	switch cmdID {
-	case CmdAFIncomingMsg:
+	case CmdUTILGetDeviceInfoRsp: // 0x6700
+		if len(data) >= 9 && data[0] == 0 {
+			coordIEEE := fmt.Sprintf("0x%016X", binary.LittleEndian.Uint64(data[1:9]))
+			z.mu.Lock()
+			z.info.IEEE = coordIEEE
+			z.info.Status = "ready"
+			z.mu.Unlock()
+			log.Printf("[ZSTACK] Coordinator device info: IEEE=%s", coordIEEE)
+		}
+
+	case CmdSYSVersionRsp: // 0x6102
+		if len(data) >= 5 {
+			ver := fmt.Sprintf("3.x (TI MT %d.%d.%d)", data[2], data[3], data[4])
+			z.mu.Lock()
+			z.info.Version = ver
+			z.mu.Unlock()
+			log.Printf("[ZSTACK] Firmware version: %s", ver)
+		}
+
+	case CmdAFIncomingMsg: // 0x4481
 		// Parse AF incoming message and convert to ZCL Frame
 		if len(data) >= 17 {
 			clusterID := zcl.ClusterID(binary.LittleEndian.Uint16(data[2:4]))
-			srcAddr := fmt.Sprintf("0x%04X", binary.LittleEndian.Uint16(data[4:6]))
+			nwk := binary.LittleEndian.Uint16(data[4:6])
+			srcAddr := fmt.Sprintf("0x%04X", nwk)
+
+			z.mu.Lock()
+			if ieee, ok := z.nwkToIEEE[nwk]; ok {
+				srcAddr = ieee
+			}
+			z.mu.Unlock()
+
 			srcEP := data[6]
 			dstEP := data[7]
 			lqi := data[10]
@@ -343,16 +458,43 @@ func (z *ZStackAdapter) handleIncomingMT(cmd0, cmd1 byte, data []byte) {
 			}
 		}
 
-	case CmdZDOEndDeviceAnnceInd:
-		// New device joined network
+	case CmdZDOTCDevInd: // 0x45CA - Trust Center Device Indication
+		if len(data) >= 10 {
+			nwk := binary.LittleEndian.Uint16(data[0:2])
+			ieee := fmt.Sprintf("0x%016X", binary.LittleEndian.Uint64(data[2:10]))
+
+			z.mu.Lock()
+			z.nwkToIEEE[nwk] = ieee
+			z.ieeeToNWK[ieee] = nwk
+			z.ieeeToNWK[strings.ToLower(ieee)] = nwk
+			handler := z.joinHandler
+			z.mu.Unlock()
+
+			log.Printf("[ZSTACK] Trust Center Device Indication: IEEE=%s NWK=0x%04X", ieee, nwk)
+
+			if handler != nil {
+				handler(adapter.DeviceJoinInfo{
+					IEEE:         ieee,
+					NWK:          nwk,
+					Capabilities: 0,
+				})
+			}
+		}
+
+	case CmdZDOEndDeviceAnnceInd: // 0x45C1 - End Device Announcement
 		if len(data) >= 11 {
 			nwk := binary.LittleEndian.Uint16(data[0:2])
 			ieee := fmt.Sprintf("0x%016X", binary.LittleEndian.Uint64(data[2:10]))
 			cap := data[10]
 
 			z.mu.Lock()
+			z.nwkToIEEE[nwk] = ieee
+			z.ieeeToNWK[ieee] = nwk
+			z.ieeeToNWK[strings.ToLower(ieee)] = nwk
 			handler := z.joinHandler
 			z.mu.Unlock()
+
+			log.Printf("[ZSTACK] Device Announcement: IEEE=%s NWK=0x%04X Cap=0x%02X", ieee, nwk, cap)
 
 			if handler != nil {
 				handler(adapter.DeviceJoinInfo{
@@ -361,6 +503,16 @@ func (z *ZStackAdapter) handleIncomingMT(cmd0, cmd1 byte, data []byte) {
 					Capabilities: cap,
 				})
 			}
+		}
+
+	case CmdUTILPermitJoinRsp: // 0x670B
+		if len(data) > 0 {
+			log.Printf("[ZSTACK] UTIL_PERMIT_JOIN_RSP received: Status=0x%02X", data[0])
+		}
+
+	case CmdZDOMgmtPermitJoinRsp: // 0x6536
+		if len(data) > 0 {
+			log.Printf("[ZSTACK] ZDO_MGMT_PERMIT_JOIN_RSP received: Status=0x%02X", data[0])
 		}
 	}
 }

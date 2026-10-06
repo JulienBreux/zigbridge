@@ -86,3 +86,32 @@ func TestParseAttributeReport(t *testing.T) {
 		t.Errorf("record 1 mismatch: %+v", records[1])
 	}
 }
+
+func TestParseReadAttributesResponse(t *testing.T) {
+	// Attribute 0x0004 (Manufacturer): Status=0x00, TypeCharString (0x42), len=4, "Nous"
+	// Attribute 0x0005 (Model): Status=0x00, TypeCharString (0x42), len=3, "A7Z"
+	// Attribute 0x0006: Status=0x86 (Unsupported attribute, should be skipped)
+	payload := []byte{
+		0x04, 0x00, 0x00, 0x42, 0x04, 'N', 'o', 'u', 's',
+		0x05, 0x00, 0x00, 0x42, 0x03, 'A', '7', 'Z',
+		0x06, 0x00, 0x86,
+	}
+
+	records, err := ParseReadAttributesResponse(payload)
+	if err != nil {
+		t.Fatalf("failed to parse read attributes response: %v", err)
+	}
+
+	if len(records) != 2 {
+		t.Fatalf("expected 2 records, got %d", len(records))
+	}
+
+	if records[0].AttributeID != 0x0004 || records[0].Value != "Nous" {
+		t.Errorf("record 0 mismatch: %+v", records[0])
+	}
+
+	if records[1].AttributeID != 0x0005 || records[1].Value != "A7Z" {
+		t.Errorf("record 1 mismatch: %+v", records[1])
+	}
+}
+

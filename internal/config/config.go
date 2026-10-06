@@ -271,7 +271,7 @@ func Default() *Config {
 			ReconnectInterval:    2 * time.Second,
 			MaxReconnectInterval: 30 * time.Second,
 			TCPKeepAlive:         10 * time.Second,
-			RFC2217:              true,
+			RFC2217:              false,
 			ReadTimeout:          10 * time.Second,
 			WriteTimeout:         5 * time.Second,
 		},

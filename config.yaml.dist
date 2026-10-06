@@ -34,7 +34,7 @@ transport:
   reconnect_interval: 2s
   max_reconnect_interval: 30s
   tcp_keepalive: 10s
-  rfc2217: true # Filter Telnet RFC2217 option negotiation sequences
+  rfc2217: false # Filter Telnet RFC2217 option negotiation sequences (false for raw TCP port 6638, true for RFC2217 port 6644)
 
   read_timeout: 10s
   write_timeout: 5s

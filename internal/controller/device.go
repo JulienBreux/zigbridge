@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -83,12 +85,49 @@ func NewDeviceRegistry() *DeviceRegistry {
 	}
 }
 
-// Get looks up a device by its 64-bit IEEE address and returns a safe clone.
-func (r *DeviceRegistry) Get(ieee string) (*Device, bool) {
+// findDeviceLocked searches for a device by IEEE, friendly name, or 16-bit NWK address.
+// Caller MUST hold r.mu (either RLock or Lock).
+func (r *DeviceRegistry) findDeviceLocked(key string) *Device {
+	if key == "" {
+		return nil
+	}
+	// 1. Direct match by IEEE key
+	if d, ok := r.devices[key]; ok {
+		return d
+	}
+
+	// 2. Parse key if it is in NWK hex format: "0x1234" or "1234"
+	var searchNWK uint16
+	hasNWK := false
+	trimmed := strings.TrimPrefix(strings.ToLower(key), "0x")
+	if len(trimmed) <= 4 && len(trimmed) > 0 {
+		if val, err := strconv.ParseUint(trimmed, 16, 16); err == nil {
+			searchNWK = uint16(val)
+			hasNWK = true
+		}
+	}
+
+	// 3. Scan registered devices
+	for _, d := range r.devices {
+		if strings.EqualFold(d.IEEE, key) {
+			return d
+		}
+		if strings.EqualFold(d.FriendlyName, key) {
+			return d
+		}
+		if hasNWK && d.NWK == searchNWK {
+			return d
+		}
+	}
+	return nil
+}
+
+// Get looks up a device by its 64-bit IEEE address, friendly name, or NWK hex address and returns a safe clone.
+func (r *DeviceRegistry) Get(key string) (*Device, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	d, ok := r.devices[ieee]
-	if !ok {
+	d := r.findDeviceLocked(key)
+	if d == nil {
 		return nil, false
 	}
 	return d.Clone(), true
@@ -111,11 +150,29 @@ func (r *DeviceRegistry) Upsert(d *Device) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if existing, ok := r.devices[d.IEEE]; ok {
-		if d.FriendlyName == "" {
-			d.FriendlyName = existing.FriendlyName
+	existing := r.findDeviceLocked(d.IEEE)
+	if existing != nil {
+		if d.FriendlyName == "" || d.FriendlyName == d.IEEE {
+			if existing.FriendlyName != "" {
+				d.FriendlyName = existing.FriendlyName
+			}
 		}
-		if d.State == nil {
+		if d.Manufacturer == "" {
+			d.Manufacturer = existing.Manufacturer
+		}
+		if d.Model == "" {
+			d.Model = existing.Model
+		}
+		if len(d.Endpoints) == 0 && len(existing.Endpoints) > 0 {
+			d.Endpoints = existing.Endpoints
+		}
+		if len(d.InputClusters) == 0 && len(existing.InputClusters) > 0 {
+			d.InputClusters = existing.InputClusters
+		}
+		if len(d.OutputClusters) == 0 && len(existing.OutputClusters) > 0 {
+			d.OutputClusters = existing.OutputClusters
+		}
+		if len(d.State) == 0 {
 			d.State = existing.State
 		}
 	}
@@ -131,11 +188,11 @@ func (r *DeviceRegistry) Upsert(d *Device) {
 }
 
 // SetFriendlyName updates the human-readable identifier for a device.
-func (r *DeviceRegistry) SetFriendlyName(ieee, name string) bool {
+func (r *DeviceRegistry) SetFriendlyName(key, name string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if d, ok := r.devices[ieee]; ok {
+	if d := r.findDeviceLocked(key); d != nil {
 		d.FriendlyName = name
 		return true
 	}
@@ -143,12 +200,12 @@ func (r *DeviceRegistry) SetFriendlyName(ieee, name string) bool {
 }
 
 // UpdateState merges new state attributes into the device record.
-func (r *DeviceRegistry) UpdateState(ieee string, updates map[string]interface{}, lqi uint8) (*Device, bool) {
+func (r *DeviceRegistry) UpdateState(key string, updates map[string]interface{}, lqi uint8) (*Device, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	d, ok := r.devices[ieee]
-	if !ok {
+	d := r.findDeviceLocked(key)
+	if d == nil {
 		return nil, false
 	}
 
@@ -167,12 +224,12 @@ func (r *DeviceRegistry) UpdateState(ieee string, updates map[string]interface{}
 }
 
 // UpdateMetadata updates endpoints and clusters for a registered device in a concurrency-safe manner.
-func (r *DeviceRegistry) UpdateMetadata(ieee string, endpoints []uint16, inClusters, outClusters []zcl.ClusterID) bool {
+func (r *DeviceRegistry) UpdateMetadata(key string, endpoints []uint16, inClusters, outClusters []zcl.ClusterID) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	d, ok := r.devices[ieee]
-	if !ok {
+	d := r.findDeviceLocked(key)
+	if d == nil {
 		return false
 	}
 	if endpoints != nil {
@@ -188,16 +245,20 @@ func (r *DeviceRegistry) UpdateMetadata(ieee string, endpoints []uint16, inClust
 }
 
 // UpdateModelInfo updates the manufacturer and model for a registered device.
-func (r *DeviceRegistry) UpdateModelInfo(ieee, manufacturer, model string) bool {
+func (r *DeviceRegistry) UpdateModelInfo(key, manufacturer, model string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	d, ok := r.devices[ieee]
-	if !ok {
+	d := r.findDeviceLocked(key)
+	if d == nil {
 		return false
 	}
-	d.Manufacturer = manufacturer
-	d.Model = model
+	if manufacturer != "" {
+		d.Manufacturer = manufacturer
+	}
+	if model != "" {
+		d.Model = model
+	}
 	return true
 }
 

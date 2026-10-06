@@ -38,6 +38,48 @@ func ParseAttributeReport(payload []byte) ([]AttributeRecord, error) {
 	return records, nil
 }
 
+// ParseReadAttributesResponse extracts attribute records from a ZCL Read Attributes Response payload.
+// Each record is formatted as:
+// - Attribute identifier (2 octets)
+// - Status (1 octet): 0x00 indicates SUCCESS
+// - Attribute data type (1 octet, present only if Status == 0x00)
+// - Attribute value (variable length, present only if Status == 0x00)
+func ParseReadAttributesResponse(payload []byte) ([]AttributeRecord, error) {
+	var records []AttributeRecord
+	offset := 0
+
+	for offset+3 <= len(payload) {
+		attrID := binary.LittleEndian.Uint16(payload[offset : offset+2])
+		status := payload[offset+2]
+		offset += 3
+
+		if status != 0x00 {
+			continue
+		}
+
+		if offset >= len(payload) {
+			break
+		}
+
+		dataType := payload[offset]
+		offset++
+
+		val, consumed, err := parseValue(dataType, payload[offset:])
+		if err != nil {
+			return records, err
+		}
+		offset += consumed
+
+		records = append(records, AttributeRecord{
+			AttributeID: attrID,
+			DataType:    dataType,
+			Value:       val,
+		})
+	}
+
+	return records, nil
+}
+
 func parseValue(dataType uint8, data []byte) (interface{}, int, error) {
 	if len(data) == 0 {
 		return nil, 0, ErrFrameTooShort

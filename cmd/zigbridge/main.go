@@ -174,6 +174,8 @@ func main() {
 				log.Printf("[EVENT:PERMIT_JOIN] Permit join status: %+v", evt.Payload)
 			case "binding_change":
 				log.Printf("[EVENT:BINDING] Binding change: %+v", evt.Payload)
+			case "system_info":
+				log.Printf("[INFO] %v", evt.Payload)
 			case "system_warning":
 				log.Printf("[WARN] System warning: %v", evt.Payload)
 			}

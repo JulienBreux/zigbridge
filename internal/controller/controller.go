@@ -255,7 +255,13 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 		(frame.CommandID == zcl.CmdReportAttributes || frame.CommandID == zcl.CmdReadAttributesResponse)
 
 	if isAttributeReport {
-		records, err := zcl.ParseAttributeReport(frame.Payload)
+		var records []zcl.AttributeRecord
+		var err error
+		if frame.CommandID == zcl.CmdReadAttributesResponse {
+			records, err = zcl.ParseReadAttributesResponse(frame.Payload)
+		} else {
+			records, err = zcl.ParseAttributeReport(frame.Payload)
+		}
 		if err == nil {
 			for _, rec := range records {
 				switch frame.ClusterID {
@@ -475,7 +481,43 @@ func (c *Controller) HandleDeviceJoin(info adapter.DeviceJoinInfo) {
 	// Publish Home Assistant auto-discovery entities
 	c.publishDeviceDiscovery(dev)
 
+	c.eventBus.Publish("system_info", fmt.Sprintf("New device joined: IEEE=%s NWK=0x%04X", info.IEEE, info.NWK))
 	c.eventBus.Publish("device_join", dev.Clone())
+
+	// Actively interview device for Basic Cluster (0x0000) attributes (Manufacturer & Model)
+	go c.interviewDevice(info.IEEE, info.NWK)
+}
+
+func (c *Controller) interviewDevice(ieee string, nwk uint16) {
+	time.Sleep(1500 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	readPayload := []byte{
+		0x04, 0x00, // 0x0004: Manufacturer Name
+		0x05, 0x00, // 0x0005: Model Identifier
+	}
+
+	frame := &zcl.Frame{
+		Header: zcl.FrameControl{
+			Type:                   zcl.FrameTypeGlobal,
+			ManufacturerSpecific:   false,
+			Direction:              zcl.DirectionClientToServer,
+			DisableDefaultResponse: false,
+		},
+		TransactionSequenceNum: 1,
+		CommandID:              zcl.CmdReadAttributes,
+		ClusterID:              zcl.ClusterBasic,
+		DestAddress:            ieee,
+		DestEndpoint:           1,
+		SourceEndpoint:         1,
+		Payload:                readPayload,
+	}
+
+	if err := c.adapter.SendZCL(ctx, frame); err != nil {
+		c.eventBus.Publish("system_warning", fmt.Sprintf("Failed to query device %s model info: %v", ieee, err))
+	}
 }
 
 // CreateDirectBinding executes a direct Zigbee binding with optimistic support.
