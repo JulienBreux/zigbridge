@@ -323,3 +323,19 @@ func NewSirenDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
+
+// NewCustomSensorDiscovery builds HA discovery for a generic sensor property.
+func NewCustomSensorDiscovery(device HADevice, ieee, baseTopic, property, name, deviceClass, unit string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "sensor",
+		UniqueID:          fmt.Sprintf("%s_%s", ieee, property),
+		Name:              name,
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:     fmt.Sprintf("{{ value_json.%s }}", property),
+		DeviceClass:       deviceClass,
+		UnitOfMeasurement: unit,
+		Device:            device,
+		AvailabilityTopic: baseTopic + "/bridge/state",
+	}
+}
+

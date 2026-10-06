@@ -1,7 +1,9 @@
 package controller_test
 
 import (
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -778,5 +780,322 @@ func TestDeviceRegistryDualLookupAndInterview(t *testing.T) {
 	}
 	if joinedDev.Model != "A7Z" {
 		t.Errorf("expected model A7Z, got %s", joinedDev.Model)
+	}
+}
+
+func TestVirtualIASZoneDevices(t *testing.T) {
+	ctrl, _, mockMQTT := setupTestController(t)
+	ctx := t.Context()
+	if err := ctrl.Start(ctx); err != nil {
+		t.Fatalf("failed to start controller: %v", err)
+	}
+
+	fixtures := ctrl.Fixtures()
+	if fixtures == nil {
+		t.Fatal("expected fixtures registry in controller")
+	}
+
+	// 1. Test IKEA BADRING E2202 (Water Leak Sensor)
+	e2202Def, ok := fixtures.Get("E2202")
+	if !ok {
+		t.Fatal("E2202 fixture definition not found")
+	}
+
+	const leakIEEE = "0x00124B0000E2202A"
+	vdevLeak, err := ctrl.SpawnVirtualDevice(e2202Def, leakIEEE, 0x2202)
+	if err != nil {
+		t.Fatalf("failed to spawn E2202 virtual device: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+
+	// Check discovery has moisture sensor
+	hasMoistureDiscovery := false
+	for _, m := range mockMQTT.GetMessages() {
+		if strings.Contains(m.Topic, "homeassistant/binary_sensor/") && strings.Contains(m.Topic, "_water_leak/config") {
+			hasMoistureDiscovery = true
+			break
+		}
+	}
+	if !hasMoistureDiscovery {
+		t.Error("expected moisture binary_sensor discovery for E2202")
+	}
+
+	// Action "leak"
+	if err := vdevLeak.TriggerAction("leak"); err != nil {
+		t.Fatalf("failed to trigger leak: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+
+	dev, ok := ctrl.GetDevice(leakIEEE)
+	if !ok || dev.State["water_leak"] != true {
+		t.Errorf("expected water_leak: true on controller dev, got: %v", dev.State)
+	}
+
+	// Action "no_leak"
+	if err := vdevLeak.TriggerAction("no_leak"); err != nil {
+		t.Fatalf("failed to trigger no_leak: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+
+	dev, _ = ctrl.GetDevice(leakIEEE)
+	if dev.State["water_leak"] != false {
+		t.Errorf("expected water_leak: false on controller dev, got: %v", dev.State)
+	}
+
+	// Direct ReportIASZone(0x0001) -> leak true
+	if err := vdevLeak.ReportIASZone(0x0001); err != nil {
+		t.Fatalf("failed to report IAS Zone: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	dev, _ = ctrl.GetDevice(leakIEEE)
+	if dev.State["water_leak"] != true {
+		t.Errorf("expected water_leak: true via ReportIASZone, got: %v", dev.State)
+	}
+
+	// 2. Test Aqara MCCGQ11LM (Door/Window Contact Sensor)
+	mccgqDef, ok := fixtures.Get("MCCGQ11LM")
+	if !ok {
+		t.Fatal("MCCGQ11LM fixture definition not found")
+	}
+
+	const contactIEEE = "0x00158D000MCCGQ01"
+	vdevContact, err := ctrl.SpawnVirtualDevice(mccgqDef, contactIEEE, 0x1111)
+	if err != nil {
+		t.Fatalf("failed to spawn MCCGQ11LM virtual device: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+
+	// Check discovery has door/contact sensor
+	hasContactDiscovery := false
+	for _, m := range mockMQTT.GetMessages() {
+		if strings.Contains(m.Topic, "homeassistant/binary_sensor/") && strings.Contains(m.Topic, "_contact/config") {
+			hasContactDiscovery = true
+			break
+		}
+	}
+	if !hasContactDiscovery {
+		t.Error("expected contact binary_sensor discovery for MCCGQ11LM")
+	}
+
+	// Action "open" -> contact: false (alarm1=1)
+	if err := vdevContact.TriggerAction("open"); err != nil {
+		t.Fatalf("failed to trigger open action: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+
+	dev, _ = ctrl.GetDevice(contactIEEE)
+	if dev.State["contact"] != false {
+		t.Errorf("expected contact: false for open door, got: %v", dev.State)
+	}
+
+	// Action "closed" -> contact: true (alarm1=0)
+	if err := vdevContact.TriggerAction("closed"); err != nil {
+		t.Fatalf("failed to trigger closed action: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+
+	dev, _ = ctrl.GetDevice(contactIEEE)
+	if dev.State["contact"] != true {
+		t.Errorf("expected contact: true for closed door, got: %v", dev.State)
+	}
+}
+
+func TestVirtualIASACEDevices(t *testing.T) {
+	ctrl, _, mockMQTT := setupTestController(t)
+	ctx := t.Context()
+	if err := ctrl.Start(ctx); err != nil {
+		t.Fatalf("failed to start controller: %v", err)
+	}
+
+	fixtures := ctrl.Fixtures()
+	keyzbDef, ok := fixtures.Get("KEYZB-110")
+	if !ok {
+		t.Fatal("KEYZB-110 fixture definition not found")
+	}
+
+	const keypadIEEE = "0x0015BC000KEYZB01"
+	vdev, err := ctrl.SpawnVirtualDevice(keyzbDef, keypadIEEE, 0x1101)
+	if err != nil {
+		t.Fatalf("failed to spawn KEYZB-110 virtual device: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+
+	actions := []string{"disarm", "arm_all_zones", "emergency"}
+	for _, act := range actions {
+		if err := vdev.TriggerAction(act); err != nil {
+			t.Fatalf("failed to trigger %s: %v", act, err)
+		}
+		time.Sleep(30 * time.Millisecond)
+
+		dev, ok := ctrl.GetDevice(keypadIEEE)
+		if !ok || dev.State["action"] != act {
+			t.Errorf("expected action %q in device state, got: %v", act, dev.State)
+		}
+
+		foundMQTT := false
+		for _, m := range mockMQTT.GetMessages() {
+			if m.Topic == "zigbridge/"+keypadIEEE && strings.Contains(string(m.Payload), fmt.Sprintf(`"action":%q`, act)) {
+				foundMQTT = true
+				break
+			}
+		}
+		if !foundMQTT {
+			t.Errorf("expected MQTT publication with action %q", act)
+		}
+	}
+}
+
+func TestVirtualPayloadDisambiguation(t *testing.T) {
+	ctrl, _, _ := setupTestController(t)
+	ctx := t.Context()
+	if err := ctrl.Start(ctx); err != nil {
+		t.Fatalf("failed to start controller: %v", err)
+	}
+
+	fixtures := ctrl.Fixtures()
+
+	// 1. SOMRIG E2213
+	e2213Def, ok := fixtures.Get("E2213")
+	if !ok {
+		t.Fatal("E2213 fixture definition not found")
+	}
+
+	const somrigIEEE = "0x00124B0000E2213A"
+	somrigDev, err := ctrl.SpawnVirtualDevice(e2213Def, somrigIEEE, 0x2213)
+	if err != nil {
+		t.Fatalf("failed to spawn E2213 virtual device: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+
+	if err := somrigDev.TriggerAction("1_initial_press"); err != nil {
+		t.Fatalf("failed to trigger 1_initial_press: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	dev, _ := ctrl.GetDevice(somrigIEEE)
+	if dev.State["action"] != "1_initial_press" {
+		t.Errorf("expected action '1_initial_press', got: %v", dev.State["action"])
+	}
+
+	if err := somrigDev.TriggerAction("2_initial_press"); err != nil {
+		t.Fatalf("failed to trigger 2_initial_press: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	dev, _ = ctrl.GetDevice(somrigIEEE)
+	if dev.State["action"] != "2_initial_press" {
+		t.Errorf("expected action '2_initial_press', got: %v", dev.State["action"])
+	}
+
+	// 2. STYRBAR E2001/E2002/E2313
+	styrbarDef, ok := fixtures.Get("E2001/E2002/E2313")
+	if !ok {
+		t.Fatal("STYRBAR fixture definition not found")
+	}
+
+	const styrbarIEEE = "0x00124B0000STYR01"
+	styrbarDev, err := ctrl.SpawnVirtualDevice(styrbarDef, styrbarIEEE, 0x2001)
+	if err != nil {
+		t.Fatalf("failed to spawn STYRBAR virtual device: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+
+	styrbarActions := []string{"arrow_left_click", "arrow_right_click", "brightness_move_up", "brightness_move_down"}
+	for _, act := range styrbarActions {
+		if err := styrbarDev.TriggerAction(act); err != nil {
+			t.Fatalf("failed to trigger STYRBAR %s: %v", act, err)
+		}
+		time.Sleep(30 * time.Millisecond)
+		dev, _ = ctrl.GetDevice(styrbarIEEE)
+		if dev.State["action"] != act {
+			t.Errorf("expected STYRBAR action %q, got: %v", act, dev.State["action"])
+		}
+	}
+}
+
+func TestDualPhaseEnergyMeter(t *testing.T) {
+	ctrl, _, mockMQTT := setupTestController(t)
+	ctx := t.Context()
+	if err := ctrl.Start(ctx); err != nil {
+		t.Fatalf("failed to start controller: %v", err)
+	}
+
+	fixtures := ctrl.Fixtures()
+	meterDef, ok := fixtures.Get("PJ-1203A")
+	if !ok {
+		t.Fatal("PJ-1203A fixture definition not found")
+	}
+
+	const meterIEEE = "0x00124B0000PJ1203"
+	_, err := ctrl.SpawnVirtualDevice(meterDef, meterIEEE, 0x1203)
+	if err != nil {
+		t.Fatalf("failed to spawn PJ-1203A: %v", err)
+	}
+	time.Sleep(30 * time.Millisecond)
+
+	// Check multi-phase sensor discovery in MQTT
+	hasPowerA := false
+	hasPowerB := false
+	for _, m := range mockMQTT.GetMessages() {
+		if strings.Contains(m.Topic, "homeassistant/sensor/") {
+			if strings.Contains(m.Topic, "_power_a/config") {
+				hasPowerA = true
+			}
+			if strings.Contains(m.Topic, "_power_b/config") {
+				hasPowerB = true
+			}
+		}
+	}
+	if !hasPowerA || !hasPowerB {
+		t.Errorf("expected power_a and power_b discovery, got powerA=%v powerB=%v", hasPowerA, hasPowerB)
+	}
+
+	// 1. Report phase A telemetry on Endpoint 1 (ActivePower 0x050B = 350W)
+	payloadEp1 := make([]byte, 5)
+	binary.LittleEndian.PutUint16(payloadEp1[0:2], 0x050B)
+	payloadEp1[2] = zcl.TypeInt16
+	binary.LittleEndian.PutUint16(payloadEp1[3:5], 350)
+
+	ctrl.HandleIncomingFrame(&zcl.Frame{
+		Header: zcl.FrameControl{
+			Type:      zcl.FrameTypeGlobal,
+			Direction: zcl.DirectionServerToClient,
+		},
+		ClusterID:      zcl.ClusterElectricalMeasurement,
+		CommandID:      zcl.CmdReportAttributes,
+		SourceAddress:  meterIEEE,
+		SourceEndpoint: 1,
+		DestEndpoint:   1,
+		Payload:        payloadEp1,
+	})
+
+	// 2. Report phase B telemetry on Endpoint 2 (ActivePower 0x050B = 720W)
+	payloadEp2 := make([]byte, 5)
+	binary.LittleEndian.PutUint16(payloadEp2[0:2], 0x050B)
+	payloadEp2[2] = zcl.TypeInt16
+	binary.LittleEndian.PutUint16(payloadEp2[3:5], 720)
+
+	ctrl.HandleIncomingFrame(&zcl.Frame{
+		Header: zcl.FrameControl{
+			Type:      zcl.FrameTypeGlobal,
+			Direction: zcl.DirectionServerToClient,
+		},
+		ClusterID:      zcl.ClusterElectricalMeasurement,
+		CommandID:      zcl.CmdReportAttributes,
+		SourceAddress:  meterIEEE,
+		SourceEndpoint: 2,
+		DestEndpoint:   1,
+		Payload:        payloadEp2,
+	})
+
+	time.Sleep(30 * time.Millisecond)
+
+	dev, ok := ctrl.GetDevice(meterIEEE)
+	if !ok {
+		t.Fatalf("failed to retrieve meter device")
+	}
+	if dev.State["power_a"] != float64(350) {
+		t.Errorf("expected power_a=350, got: %v", dev.State["power_a"])
+	}
+	if dev.State["power_b"] != float64(720) {
+		t.Errorf("expected power_b=720, got: %v", dev.State["power_b"])
 	}
 }

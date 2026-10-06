@@ -1,12 +1,15 @@
 package controller
 
 import (
+	"bytes"
 	"cmp"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -257,6 +260,7 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 	}
 
 	stateUpdates := make(map[string]any)
+	existingDev, _ := c.devices.Get(frame.SourceAddress)
 
 	// Parse attribute reports if present (Global profile commands)
 	isAttributeReport := frame.Header.Type == zcl.FrameTypeGlobal &&
@@ -277,9 +281,8 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 					switch rec.AttributeID {
 					case 0x0004: // Manufacturer Name
 						if str, ok := rec.Value.(string); ok {
-							existingDev, found := c.devices.Get(frame.SourceAddress)
 							model := ""
-							if found {
+							if existingDev != nil {
 								model = existingDev.Model
 							}
 							c.devices.UpdateModelInfo(frame.SourceAddress, str, model)
@@ -289,9 +292,8 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 						}
 					case 0x0005: // Model Identifier
 						if str, ok := rec.Value.(string); ok {
-							existingDev, found := c.devices.Get(frame.SourceAddress)
 							mfg := ""
-							if found {
+							if existingDev != nil {
 								mfg = existingDev.Manufacturer
 							}
 							c.devices.UpdateModelInfo(frame.SourceAddress, mfg, str)
@@ -338,6 +340,17 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 						stateUpdates["occupancy"] = b
 					}
 				case zcl.ClusterElectricalMeasurement:
+					isDualPhase := false
+					if existingDev != nil && c.fixtures != nil && existingDev.Model != "" {
+						if def, ok := c.fixtures.Get(existingDev.Model); ok {
+							for _, exp := range def.Device.Exposes {
+								if exp.Property == "power_a" {
+									isDualPhase = true
+									break
+								}
+							}
+						}
+					}
 					switch rec.AttributeID {
 					case 0x0505: // RMSVoltage (V)
 						if v, ok := toFloat64(rec.Value); ok {
@@ -345,22 +358,63 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 						}
 					case 0x0508: // RMSCurrent (A)
 						if v, ok := toFloat64(rec.Value); ok {
-							stateUpdates["current"] = v
+							if isDualPhase && frame.SourceEndpoint == 2 {
+								stateUpdates["current_b"] = v
+							} else if isDualPhase {
+								stateUpdates["current_a"] = v
+							} else {
+								stateUpdates["current"] = v
+							}
 						}
 					case 0x050B: // ActivePower (W)
 						if v, ok := toFloat64(rec.Value); ok {
-							stateUpdates["power"] = v
+							if isDualPhase && frame.SourceEndpoint == 2 {
+								stateUpdates["power_b"] = v
+							} else if isDualPhase {
+								stateUpdates["power_a"] = v
+							} else {
+								stateUpdates["power"] = v
+							}
 						}
 					default:
 						if v, ok := toFloat64(rec.Value); ok {
-							stateUpdates["power"] = v
+							if isDualPhase && frame.SourceEndpoint == 2 {
+								stateUpdates["power_b"] = v
+							} else if isDualPhase {
+								stateUpdates["power_a"] = v
+							} else {
+								stateUpdates["power"] = v
+							}
 						}
 					}
 				case zcl.ClusterMetering:
+					isDualPhase := false
+					if existingDev != nil && c.fixtures != nil && existingDev.Model != "" {
+						if def, ok := c.fixtures.Get(existingDev.Model); ok {
+							for _, exp := range def.Device.Exposes {
+								if exp.Property == "energy_a" {
+									isDualPhase = true
+									break
+								}
+							}
+						}
+					}
 					switch rec.AttributeID {
 					case 0x0000: // CurrentSummationDelivered (kWh)
 						if v, ok := toFloat64(rec.Value); ok {
-							stateUpdates["energy"] = v
+							if isDualPhase && frame.SourceEndpoint == 2 {
+								stateUpdates["energy_b"] = v
+							} else if isDualPhase {
+								stateUpdates["energy_a"] = v
+							} else {
+								stateUpdates["energy"] = v
+							}
+						}
+					}
+				case zcl.ClusterIASZone:
+					if rec.AttributeID == 0x0002 { // ZoneStatus
+						if val, ok := toUint16(rec.Value); ok {
+							c.applyIASZoneStatus(existingDev, val, stateUpdates)
 						}
 					}
 				case zcl.ClusterPowerConfiguration:
@@ -379,39 +433,123 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 		}
 	}
 
-	// Look up existing device
-	existingDev, _ := c.devices.Get(frame.SourceAddress)
-
 	// Check if this is an action command (non-report, cluster-specific or button command)
 	if !isAttributeReport {
 		matchedAction := false
 		if c.fixtures != nil && existingDev != nil && existingDev.Model != "" {
 			if def, ok := c.fixtures.Get(existingDev.Model); ok {
+				var fallbackAct *fixture.ActionSim
 				for _, act := range def.Device.Simulations.Actions {
-					if act.Cluster == uint16(frame.ClusterID) && act.Command == frame.CommandID {
-						maps.Copy(stateUpdates, act.MQTTPayload)
-						matchedAction = true
-						break
+					if act.Cluster != uint16(frame.ClusterID) || act.Command != frame.CommandID {
+						continue
 					}
+					if len(act.Payload) > 0 {
+						if bytes.HasPrefix(frame.Payload, act.Payload) {
+							actCopy := act
+							fallbackAct = &actCopy
+							break
+						}
+					} else if fallbackAct == nil {
+						actCopy := act
+						fallbackAct = &actCopy
+					}
+				}
+				if fallbackAct != nil {
+					maps.Copy(stateUpdates, fallbackAct.MQTTPayload)
+					matchedAction = true
 				}
 			}
 		}
 
-		if !matchedAction && frame.ClusterID == zcl.ClusterOnOff {
-			switch frame.CommandID {
-			case 0x02: // Toggle
-				stateUpdates["action"] = "single"
-			case 0x01: // On
-				if existingDev != nil && (existingDev.Model == "SNZB-01P" || existingDev.Model == "WB01") {
-					stateUpdates["action"] = "double"
-				} else {
-					stateUpdates["action"] = "on"
+		if !matchedAction {
+			switch frame.ClusterID {
+			case zcl.ClusterOnOff:
+				switch frame.CommandID {
+				case 0x02: // Toggle
+					stateUpdates["action"] = "single"
+				case 0x01: // On
+					if existingDev != nil && (existingDev.Model == "SNZB-01P" || existingDev.Model == "WB01") {
+						stateUpdates["action"] = "double"
+					} else {
+						stateUpdates["action"] = "on"
+					}
+				case 0x00: // Off
+					if existingDev != nil && (existingDev.Model == "SNZB-01P" || existingDev.Model == "WB01") {
+						stateUpdates["action"] = "long"
+					} else {
+						stateUpdates["action"] = "off"
+					}
 				}
-			case 0x00: // Off
-				if existingDev != nil && (existingDev.Model == "SNZB-01P" || existingDev.Model == "WB01") {
-					stateUpdates["action"] = "long"
-				} else {
-					stateUpdates["action"] = "off"
+			case zcl.ClusterIASZone:
+				if frame.CommandID == 0x00 && len(frame.Payload) >= 2 { // CmdIASZoneStatusChangeNotification
+					status := binary.LittleEndian.Uint16(frame.Payload[:2])
+					c.applyIASZoneStatus(existingDev, status, stateUpdates)
+				}
+			case zcl.ClusterIASACE:
+				switch frame.CommandID {
+				case zcl.CmdIASACEArm: // 0x00
+					if len(frame.Payload) > 0 {
+						switch frame.Payload[0] {
+						case 0:
+							stateUpdates["action"] = "disarm"
+						case 1:
+							stateUpdates["action"] = "arm_day_zones"
+						case 2:
+							stateUpdates["action"] = "arm_night_zones"
+						case 3:
+							stateUpdates["action"] = "arm_all_zones"
+						default:
+							stateUpdates["action"] = "arm"
+						}
+					} else {
+						stateUpdates["action"] = "arm"
+					}
+				case zcl.CmdIASACEBypass: // 0x01
+					stateUpdates["action"] = "bypass"
+				case zcl.CmdIASACEEmergency: // 0x02
+					stateUpdates["action"] = "emergency"
+				case zcl.CmdIASACEFire: // 0x03
+					stateUpdates["action"] = "fire"
+				case zcl.CmdIASACEPanic: // 0x04
+					stateUpdates["action"] = "panic"
+				}
+			case zcl.ClusterLevelControl:
+				switch frame.CommandID {
+				case 0x01, 0x05: // Move / MoveWithOnOff
+					if len(frame.Payload) > 0 && frame.Payload[0] == 1 {
+						stateUpdates["action"] = "brightness_move_down"
+					} else {
+						stateUpdates["action"] = "brightness_move_up"
+					}
+				case 0x02: // Step
+					if len(frame.Payload) > 0 && frame.Payload[0] == 1 {
+						stateUpdates["action"] = "brightness_step_down"
+					} else {
+						stateUpdates["action"] = "brightness_step_up"
+					}
+				case 0x03, 0x06: // Stop / StopWithOnOff
+					stateUpdates["action"] = "brightness_stop"
+				}
+			case zcl.ClusterScenes:
+				switch frame.CommandID {
+				case 0x07: // RecallScene
+					if len(frame.Payload) > 0 && frame.Payload[0] == 1 {
+						stateUpdates["action"] = "arrow_left_click"
+					} else {
+						stateUpdates["action"] = "arrow_right_click"
+					}
+				case 0x08:
+					if len(frame.Payload) > 0 && frame.Payload[0] == 1 {
+						stateUpdates["action"] = "arrow_left_hold"
+					} else {
+						stateUpdates["action"] = "arrow_right_hold"
+					}
+				case 0x09:
+					if len(frame.Payload) > 0 && frame.Payload[0] == 1 {
+						stateUpdates["action"] = "arrow_left_release"
+					} else {
+						stateUpdates["action"] = "arrow_right_release"
+					}
 				}
 			}
 		}
@@ -746,43 +884,133 @@ func (c *Controller) publishDeviceDiscovery(dev *Device) {
 		return slices.Contains(dev.OutputClusters, cid)
 	}
 
-	// Always publish default on/off if InputClusters has OnOff or by default for basic devices
-	if hasInCluster(zcl.ClusterOnOff) || len(dev.InputClusters) == 0 {
+	var def *fixture.DeviceDefinition
+	if c.fixtures != nil && dev.Model != "" {
+		def, _ = c.fixtures.Get(dev.Model)
+	}
+
+	hasExpose := func(prop string) bool {
+		if def != nil {
+			for _, exp := range def.Device.Exposes {
+				if exp.Property == prop {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	// 1. OnOff Switch: If device has InCluster OnOff, or exposes "state", or has no input clusters and no def
+	if hasInCluster(zcl.ClusterOnOff) || hasExpose("state") || (len(dev.InputClusters) == 0 && def == nil) {
 		_ = c.mqtt.PublishDiscovery(mqtt.NewOnOffDiscovery(haDev, dev.IEEE, baseTopic))
 	}
 
-	// If device acts as a button controller (output cluster OnOff)
-	if hasOutCluster(zcl.ClusterOnOff) {
+	// 2. Action & Device Triggers: If button/remote controller (outCluster OnOff/IASACE/Level/Scenes, or exposes action)
+	if hasOutCluster(zcl.ClusterOnOff) || hasOutCluster(zcl.ClusterIASACE) || hasOutCluster(zcl.ClusterLevelControl) || hasOutCluster(zcl.ClusterScenes) || hasExpose("action") {
 		_ = c.mqtt.PublishDiscovery(mqtt.NewActionDiscovery(haDev, dev.IEEE, baseTopic))
-		for _, action := range []string{"single", "double", "long"} {
+
+		var actions []string
+		if def != nil {
+			for _, exp := range def.Device.Exposes {
+				if exp.Property == "action" && len(exp.Values) > 0 {
+					actions = slices.Clone(exp.Values)
+					break
+				}
+			}
+			if len(actions) == 0 && len(def.Device.Simulations.Actions) > 0 {
+				for a := range def.Device.Simulations.Actions {
+					actions = append(actions, a)
+				}
+			}
+		}
+		if len(actions) == 0 {
+			actions = []string{"single", "double", "long"}
+		}
+		slices.Sort(actions)
+		actions = slices.Compact(actions)
+
+		for _, action := range actions {
 			_ = c.mqtt.PublishDiscovery(mqtt.NewDeviceTriggerDiscovery(haDev, dev.IEEE, baseTopic, action))
 		}
 	}
 
-	// Electrical Measurement & Metering
-	if hasInCluster(zcl.ClusterElectricalMeasurement) {
-		_ = c.mqtt.PublishDiscovery(mqtt.NewPowerDiscovery(haDev, dev.IEEE, baseTopic))
-		_ = c.mqtt.PublishDiscovery(mqtt.NewCurrentDiscovery(haDev, dev.IEEE, baseTopic))
-		_ = c.mqtt.PublishDiscovery(mqtt.NewMainsVoltageDiscovery(haDev, dev.IEEE, baseTopic))
+	// 3. Electrical Measurement & Metering
+	if hasInCluster(zcl.ClusterElectricalMeasurement) || hasExpose("power") || hasExpose("current") || hasExpose("voltage") {
+		if hasInCluster(zcl.ClusterElectricalMeasurement) || hasExpose("power") {
+			_ = c.mqtt.PublishDiscovery(mqtt.NewPowerDiscovery(haDev, dev.IEEE, baseTopic))
+		}
+		if hasInCluster(zcl.ClusterElectricalMeasurement) || hasExpose("current") {
+			_ = c.mqtt.PublishDiscovery(mqtt.NewCurrentDiscovery(haDev, dev.IEEE, baseTopic))
+		}
+		if hasInCluster(zcl.ClusterElectricalMeasurement) || hasExpose("voltage") {
+			_ = c.mqtt.PublishDiscovery(mqtt.NewMainsVoltageDiscovery(haDev, dev.IEEE, baseTopic))
+		}
 	}
-	if hasInCluster(zcl.ClusterMetering) {
+	if hasInCluster(zcl.ClusterMetering) || hasExpose("energy") {
 		_ = c.mqtt.PublishDiscovery(mqtt.NewEnergyDiscovery(haDev, dev.IEEE, baseTopic))
 	}
 
-	// Power & Battery
-	if hasInCluster(zcl.ClusterPowerConfiguration) || dev.Battery > 0 {
+	// Multi-phase or clamped electrical exposes (e.g. PJ-1203A power_a, power_b, current_a, current_b, energy_a, energy_b)
+	if def != nil {
+		for _, exp := range def.Device.Exposes {
+			switch exp.Property {
+			case "power_a", "power_b", "power_ab":
+				name := haDev.Name + " " + strings.ToUpper(strings.ReplaceAll(exp.Property, "_", " "))
+				_ = c.mqtt.PublishDiscovery(mqtt.NewCustomSensorDiscovery(haDev, dev.IEEE, baseTopic, exp.Property, name, "power", "W"))
+			case "current_a", "current_b":
+				name := haDev.Name + " " + strings.ToUpper(strings.ReplaceAll(exp.Property, "_", " "))
+				_ = c.mqtt.PublishDiscovery(mqtt.NewCustomSensorDiscovery(haDev, dev.IEEE, baseTopic, exp.Property, name, "current", "A"))
+			case "energy_a", "energy_b":
+				name := haDev.Name + " " + strings.ToUpper(strings.ReplaceAll(exp.Property, "_", " "))
+				_ = c.mqtt.PublishDiscovery(mqtt.NewCustomSensorDiscovery(haDev, dev.IEEE, baseTopic, exp.Property, name, "energy", "kWh"))
+			}
+		}
+	}
+
+	// 4. Power & Battery
+	if hasInCluster(zcl.ClusterPowerConfiguration) || hasExpose("battery") || dev.Battery > 0 {
 		_ = c.mqtt.PublishDiscovery(mqtt.NewBatteryDiscovery(haDev, dev.IEEE, baseTopic))
-		if !hasInCluster(zcl.ClusterElectricalMeasurement) {
+		if !hasInCluster(zcl.ClusterElectricalMeasurement) && !hasExpose("power") {
 			_ = c.mqtt.PublishDiscovery(mqtt.NewVoltageDiscovery(haDev, dev.IEEE, baseTopic))
 		}
 	}
 
-	// Temperature & Humidity
-	if hasInCluster(zcl.ClusterTemperatureMeasurement) {
+	// 5. Temperature & Humidity
+	if hasInCluster(zcl.ClusterTemperatureMeasurement) || hasExpose("temperature") {
 		_ = c.mqtt.PublishDiscovery(mqtt.NewTemperatureDiscovery(haDev, dev.IEEE, baseTopic))
 	}
-	if hasInCluster(zcl.ClusterRelativeHumidity) {
+	if hasInCluster(zcl.ClusterRelativeHumidity) || hasExpose("humidity") {
 		_ = c.mqtt.PublishDiscovery(mqtt.NewHumidityDiscovery(haDev, dev.IEEE, baseTopic))
+	}
+
+	// 6. Occupancy
+	if hasInCluster(zcl.ClusterOccupancySensing) || hasExpose("occupancy") {
+		_ = c.mqtt.PublishDiscovery(mqtt.NewOccupancyDiscovery(haDev, dev.IEEE, baseTopic))
+	}
+
+	// 7. IAS Zone (Moisture, Contact, Smoke, Tamper, BatteryLow)
+	lowerModel := strings.ToLower(model + " " + dev.FriendlyName)
+	if hasInCluster(zcl.ClusterIASZone) || hasExpose("water_leak") || hasExpose("contact") || hasExpose("smoke") {
+		if hasExpose("water_leak") || (!hasExpose("contact") && !hasExpose("smoke") && strings.Contains(lowerModel, "leak")) {
+			_ = c.mqtt.PublishDiscovery(mqtt.NewMoistureDiscovery(haDev, dev.IEEE, baseTopic))
+		}
+		if hasExpose("contact") || (!hasExpose("water_leak") && !hasExpose("smoke") && (strings.Contains(lowerModel, "contact") || strings.Contains(lowerModel, "door") || strings.Contains(lowerModel, "window") || strings.Contains(lowerModel, "mccgq"))) {
+			_ = c.mqtt.PublishDiscovery(mqtt.NewContactDiscovery(haDev, dev.IEEE, baseTopic))
+		}
+		if hasExpose("smoke") || strings.Contains(lowerModel, "smoke") {
+			_ = c.mqtt.PublishDiscovery(mqtt.NewSmokeDiscovery(haDev, dev.IEEE, baseTopic))
+		}
+		if hasExpose("tamper") || hasInCluster(zcl.ClusterIASZone) {
+			_ = c.mqtt.PublishDiscovery(mqtt.NewTamperDiscovery(haDev, dev.IEEE, baseTopic))
+		}
+		if hasExpose("battery_low") || hasInCluster(zcl.ClusterIASZone) {
+			_ = c.mqtt.PublishDiscovery(mqtt.NewBatteryLowDiscovery(haDev, dev.IEEE, baseTopic))
+		}
+	}
+
+	// 8. IAS WD / Siren
+	if hasInCluster(zcl.ClusterIASWD) || hasExpose("warning") || hasExpose("squawk") || strings.Contains(lowerModel, "siren") {
+		_ = c.mqtt.PublishDiscovery(mqtt.NewSirenDiscovery(haDev, dev.IEEE, baseTopic))
 	}
 }
 
@@ -867,6 +1095,81 @@ func toFloat64(val any) (float64, bool) {
 		return float64(v), true
 	case int:
 		return float64(v), true
+	default:
+		return 0, false
+	}
+}
+
+func (c *Controller) applyIASZoneStatus(dev *Device, status uint16, stateUpdates map[string]any) {
+	alarm1 := (status & 0x0001) != 0
+	alarm2 := (status & 0x0002) != 0
+	tamper := (status & 0x0004) != 0
+	batteryLow := (status & 0x0008) != 0
+	deviceType := "leak"
+	if dev != nil {
+		if c.fixtures != nil && dev.Model != "" {
+			if def, ok := c.fixtures.Get(dev.Model); ok {
+				for _, exp := range def.Device.Exposes {
+					if exp.Property == "contact" {
+						deviceType = "contact"
+						break
+					} else if exp.Property == "water_leak" {
+						deviceType = "leak"
+						break
+					} else if exp.Property == "smoke" {
+						deviceType = "smoke"
+						break
+					} else if exp.Property == "occupancy" {
+						deviceType = "occupancy"
+						break
+					}
+				}
+			}
+		}
+		if deviceType == "leak" {
+			lowerModel := strings.ToLower(dev.Model + " " + dev.FriendlyName)
+			if strings.Contains(lowerModel, "contact") || strings.Contains(lowerModel, "door") || strings.Contains(lowerModel, "window") || strings.Contains(lowerModel, "mccgq") {
+				deviceType = "contact"
+			} else if strings.Contains(lowerModel, "smoke") {
+				deviceType = "smoke"
+			} else if strings.Contains(lowerModel, "motion") || strings.Contains(lowerModel, "occupancy") {
+				deviceType = "occupancy"
+			}
+		}
+	}
+	switch deviceType {
+	case "contact":
+		stateUpdates["contact"] = !alarm1
+	case "smoke":
+		stateUpdates["smoke"] = alarm1
+	case "occupancy":
+		stateUpdates["occupancy"] = alarm1
+	default:
+		stateUpdates["water_leak"] = alarm1
+	}
+	stateUpdates["tamper"] = tamper
+	if batteryLow {
+		stateUpdates["battery_low"] = true
+	}
+	if alarm2 {
+		stateUpdates["alarm2"] = true
+	}
+}
+
+func toUint16(val any) (uint16, bool) {
+	switch v := val.(type) {
+	case uint16:
+		return v, true
+	case uint8:
+		return uint16(v), true
+	case uint32:
+		return uint16(v), true
+	case int:
+		return uint16(v), true
+	case int16:
+		return uint16(v), true
+	case int32:
+		return uint16(v), true
 	default:
 		return 0, false
 	}

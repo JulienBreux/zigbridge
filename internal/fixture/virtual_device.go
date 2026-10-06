@@ -305,6 +305,38 @@ func (v *VirtualDevice) ReportElectrical(powerW float64, voltageV float64, curre
 	return nil
 }
 
+// ReportIASZone simulates an IAS Zone status change notification (Cluster 0x0500, Command 0x00).
+func (v *VirtualDevice) ReportIASZone(status uint16) error {
+	if v.emitter == nil {
+		return errors.New("no frame emitter attached to virtual device")
+	}
+
+	v.mu.Lock()
+	v.seq++
+	seq := v.seq
+	v.mu.Unlock()
+
+	payload := make([]byte, 6)
+	binary.LittleEndian.PutUint16(payload[0:2], status)
+
+	v.emitter.EmitFrame(&zcl.Frame{
+		Header: zcl.FrameControl{
+			Type:      zcl.FrameTypeClusterSpecific,
+			Direction: zcl.DirectionServerToClient,
+		},
+		TransactionSequenceNum: seq,
+		CommandID:              0x00,
+		ClusterID:              zcl.ClusterIASZone,
+		SourceAddress:          v.IEEE,
+		SourceEndpoint:         1,
+		DestEndpoint:           1,
+		LQI:                    255,
+		Payload:                payload,
+	})
+
+	return nil
+}
+
 // GetState returns a snapshot of simulated device state.
 func (v *VirtualDevice) GetState() map[string]any {
 	v.mu.RLock()
@@ -314,3 +346,4 @@ func (v *VirtualDevice) GetState() map[string]any {
 	maps.Copy(cp, v.state)
 	return cp
 }
+
