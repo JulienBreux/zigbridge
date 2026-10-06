@@ -2,9 +2,10 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"strings"
 	"sync"
@@ -121,7 +122,6 @@ func (t *TCPTransport) connect() error {
 // reconnectLoop handles exponential backoff reconnection for network coordinators.
 func (t *TCPTransport) reconnectLoop() {
 	backoff := t.config.ReconnectInterval
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for {
 		select {
@@ -146,11 +146,8 @@ func (t *TCPTransport) reconnectLoop() {
 
 		// Calculate jittered exponential backoff
 		backoff = time.Duration(float64(backoff) * 1.5)
-		jitter := time.Duration(rng.Int63n(int64(backoff) / 4))
-		backoff += jitter
-		if backoff > t.config.MaxReconnectInterval {
-			backoff = t.config.MaxReconnectInterval
-		}
+		jitter := rand.N(backoff / 4)
+		backoff = min(backoff+jitter, t.config.MaxReconnectInterval)
 	}
 }
 
@@ -199,10 +196,11 @@ func (t *TCPTransport) Read(p []byte) (int, error) {
 
 	n, err := conn.Read(p)
 	if err != nil {
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
 			return 0, err
 		}
-		if err == io.EOF || isConnectionError(err) {
+		if errors.Is(err, io.EOF) || isConnectionError(err) {
 			t.handleDisconnect(err)
 		}
 		return n, err

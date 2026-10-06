@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -164,7 +165,7 @@ func TestStoreAtomicFileWrite(t *testing.T) {
 
 	// Verify temporary file does NOT remain
 	tmpFile := storePath + ".tmp"
-	if _, err := os.Stat(tmpFile); !os.IsNotExist(err) {
+	if _, err := os.Stat(tmpFile); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("temporary file %s should have been cleaned up/renamed", tmpFile)
 	}
 }
@@ -194,7 +195,7 @@ func TestStoreDebouncing(t *testing.T) {
 	store := NewDeviceStore(storePath, 80*time.Millisecond, reg, nil)
 
 	// Rapidly call ScheduleSave
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		reg.Upsert(&Device{
 			IEEE:         "0x00124B001CA12345",
 			FriendlyName: "Debounced Device",
@@ -204,7 +205,7 @@ func TestStoreDebouncing(t *testing.T) {
 	}
 
 	// Immediately check: file should NOT exist yet due to debounce
-	if _, err := os.Stat(storePath); !os.IsNotExist(err) {
+	if _, err := os.Stat(storePath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("file should not exist immediately during debounce window")
 	}
 

@@ -2,6 +2,7 @@ package fixture
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -60,8 +61,11 @@ func (r *Registry) LoadEmbedded() error {
 // LoadFromDir loads all .yaml and .yml files from a specified filesystem directory.
 func (r *Registry) LoadFromDir(dir string) error {
 	info, err := os.Stat(dir)
-	if os.IsNotExist(err) || !info.IsDir() {
+	if errors.Is(err, os.ErrNotExist) || (err == nil && !info.IsDir()) {
 		return nil // directory not present, gracefully skip
+	}
+	if err != nil {
+		return fmt.Errorf("failed to stat fixture directory %s: %w", dir, err)
 	}
 
 	entries, err := os.ReadDir(dir)

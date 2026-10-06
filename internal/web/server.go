@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"sort"
@@ -596,7 +596,7 @@ func (s *Server) handleSpawnVirtualDevice(w http.ResponseWriter, r *http.Request
 	}
 	nwk := body.NWK
 	if nwk == 0 {
-		nwk = uint16(rand.Intn(0xff00) + 0x0010)
+		nwk = uint16(rand.IntN(0xff00) + 0x0010)
 	}
 
 	vdev, err := s.controller.SpawnVirtualDevice(def, ieee, nwk)
