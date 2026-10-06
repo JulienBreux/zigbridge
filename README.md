@@ -2,9 +2,8 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.27+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
-[![Tests](https://img.shields.io/badge/tests-100%25%20passing-brightgreen.svg)]()
-[![Static Analysis](https://img.shields.io/badge/linter-golangci--lint%20clean-brightgreen.svg)]()
+[![CI](https://github.com/julienbreux/zigbridge/actions/workflows/ci.yml/badge.svg)](https://github.com/julienbreux/zigbridge/actions/workflows/ci.yml)
+[![Release](https://github.com/julienbreux/zigbridge/actions/workflows/release.yml/badge.svg)](https://github.com/julienbreux/zigbridge/actions/workflows/release.yml)
 
 **Zigbridge** is a next-generation Zigbee-to-MQTT bridge and **Direct Binding Orchestrator** built for speed, resilience, and simplicity.
 

@@ -100,7 +100,7 @@ run:
 .PHONY: clean
 clean:
 	@echo "==> Cleaning build artifacts..."
-	rm -rf $(BIN_DIR) coverage
+	rm -rf $(BIN_DIR) coverage dist
 
 ## help: Display available make targets
 .PHONY: help
