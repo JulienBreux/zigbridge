@@ -22,6 +22,7 @@ import (
 	"github.com/julienbreux/zigbridge/internal/fixture"
 	"github.com/julienbreux/zigbridge/internal/mqtt"
 	"github.com/julienbreux/zigbridge/internal/transport"
+	"github.com/julienbreux/zigbridge/internal/version"
 	"github.com/julienbreux/zigbridge/internal/zcl"
 )
 
@@ -40,6 +41,8 @@ var ErrCoordinatorNotConnected = errors.New("coordinator is not connected")
 
 // BridgeStatus reports high-level metrics and coordinator state.
 type BridgeStatus struct {
+	Version             string              `json:"version"`
+	Commit              string              `json:"commit,omitempty"`
 	Connected           bool                `json:"connected"`
 	TransportStatus     string              `json:"transport_status"`
 	Coordinator         adapter.AdapterInfo `json:"coordinator"`
@@ -845,6 +848,8 @@ func (c *Controller) Status() BridgeStatus {
 	}
 
 	return BridgeStatus{
+		Version:             version.Version,
+		Commit:              version.Commit,
 		Connected:           connected,
 		TransportStatus:     transStatus,
 		Coordinator:         coordInfo,

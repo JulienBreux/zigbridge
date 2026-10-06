@@ -14,7 +14,10 @@ BUILD_DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS := -s -w \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.Commit=$(COMMIT)' \
-	-X 'main.BuildDate=$(BUILD_DATE)'
+	-X 'main.BuildDate=$(BUILD_DATE)' \
+	-X 'github.com/julienbreux/zigbridge/internal/version.Version=$(VERSION)' \
+	-X 'github.com/julienbreux/zigbridge/internal/version.Commit=$(COMMIT)' \
+	-X 'github.com/julienbreux/zigbridge/internal/version.BuildDate=$(BUILD_DATE)'
 
 .PHONY: all
 all: build

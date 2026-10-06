@@ -20,6 +20,7 @@ import (
 	"github.com/julienbreux/zigbridge/internal/controller"
 	"github.com/julienbreux/zigbridge/internal/mqtt"
 	"github.com/julienbreux/zigbridge/internal/transport"
+	"github.com/julienbreux/zigbridge/internal/version"
 	"github.com/julienbreux/zigbridge/internal/web"
 )
 
@@ -29,6 +30,12 @@ var (
 	Commit    = "unknown"
 	BuildDate = "unknown"
 )
+
+func init() {
+	version.Version = Version
+	version.Commit = Commit
+	version.BuildDate = BuildDate
+}
 
 const banner = `
   ______ _       _          _     _            

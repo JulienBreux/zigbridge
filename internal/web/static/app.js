@@ -222,6 +222,15 @@ async function loadStatus() {
     // Permit join countdown
     updatePermitJoinDisplay(data.permit_join_remaining || 0);
 
+    // Footer Version Tag
+    const versionEl = document.getElementById('footer-version-tag');
+    if (versionEl && data.version) {
+      versionEl.textContent = (data.version.startsWith('v') || data.version === 'dev') ? data.version : `v${data.version}`;
+      if (data.commit) {
+        versionEl.title = `Commit: ${data.commit}`;
+      }
+    }
+
   } catch (err) {
     console.error('Failed to load status:', err);
     isCoordinatorOnline = false;
