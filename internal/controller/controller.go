@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -854,6 +855,166 @@ func (c *Controller) UpdateDeviceModel(ieee, manufacturer, model string) bool {
 		c.store.ScheduleSave()
 	}
 	return ok
+}
+
+// SetDeviceState updates the state of a device, dispatches commands if applicable, and broadcasts updates.
+func (c *Controller) SetDeviceState(ctx context.Context, ieee string, updates map[string]any) (*Device, error) {
+	dev, ok := c.devices.Get(ieee)
+	if !ok {
+		return nil, fmt.Errorf("device %s not found", ieee)
+	}
+
+	// Update virtual device if running in mock simulation mode
+	if c.IsSimulationSupported() {
+		if vdev, ok := c.GetVirtualDevice(ieee); ok {
+			vdev.SetState(updates)
+		}
+	}
+
+	// Update device registry
+	updatedDev, ok := c.devices.UpdateState(ieee, updates, dev.LQI)
+	if !ok {
+		return nil, fmt.Errorf("failed to update state for device %s", ieee)
+	}
+
+	// Schedule store persistence
+	if c.store != nil {
+		c.store.ScheduleSave()
+	}
+
+	// Broadcast via EventBus
+	c.eventBus.Publish("device_state", map[string]any{
+		"ieee":          updatedDev.IEEE,
+		"friendly_name": updatedDev.FriendlyName,
+		"state":         updatedDev.State,
+	})
+
+	// Publish to MQTT
+	if c.mqtt != nil && c.mqtt.IsConnected() {
+		topic := c.cfg.MQTT.BaseTopic + "/" + cmp.Or(updatedDev.FriendlyName, updatedDev.IEEE)
+		payload, err := json.Marshal(updatedDev.State)
+		if err == nil {
+			_ = c.mqtt.Publish(topic, 0, true, payload)
+		}
+	}
+
+	// Dispatch outbound ZCL frames to real adapter if physical
+	if c.adapter != nil && !c.IsSimulationSupported() {
+		c.dispatchStateZCL(ctx, updatedDev, updates)
+	}
+
+	return updatedDev, nil
+}
+
+// TriggerDeviceAction triggers an action command on a device (e.g. "identify" or virtual device button).
+func (c *Controller) TriggerDeviceAction(ctx context.Context, ieee string, action string) error {
+	dev, ok := c.devices.Get(ieee)
+	if !ok {
+		return fmt.Errorf("device %s not found", ieee)
+	}
+
+	if c.IsSimulationSupported() {
+		if vdev, ok := c.GetVirtualDevice(ieee); ok {
+			return vdev.TriggerAction(action)
+		}
+	}
+
+	if strings.EqualFold(action, "identify") && c.adapter != nil {
+		var ep uint8 = 1
+		if len(dev.Endpoints) > 0 {
+			ep = uint8(dev.Endpoints[0])
+		}
+		frame := &zcl.Frame{
+			Header: zcl.FrameControl{
+				Type:                   zcl.FrameTypeClusterSpecific,
+				Direction:              zcl.DirectionClientToServer,
+				DisableDefaultResponse: true,
+			},
+			TransactionSequenceNum: 1,
+			CommandID:              0, // Identify command
+			ClusterID:              zcl.ClusterIdentify,
+			DestAddress:            dev.IEEE,
+			DestEndpoint:           ep,
+			SourceEndpoint:         1,
+			Payload:                []byte{0x05, 0x00}, // 5 seconds identify
+		}
+		return c.adapter.SendZCL(ctx, frame)
+	}
+
+	return nil
+}
+
+func (c *Controller) dispatchStateZCL(ctx context.Context, dev *Device, updates map[string]any) {
+	if c.adapter == nil || dev == nil {
+		return
+	}
+	var ep uint8 = 1
+	if len(dev.Endpoints) > 0 {
+		ep = uint8(dev.Endpoints[0])
+	}
+
+	for k, v := range updates {
+		switch strings.ToLower(k) {
+		case "state":
+			strVal := strings.ToUpper(fmt.Sprint(v))
+			var cmdID uint8
+			switch strVal {
+			case "ON":
+				cmdID = 1 // CmdOn
+			case "OFF":
+				cmdID = 0 // CmdOff
+			case "TOGGLE":
+				cmdID = 2 // CmdToggle
+			default:
+				continue
+			}
+			frame := &zcl.Frame{
+				Header: zcl.FrameControl{
+					Type:                   zcl.FrameTypeClusterSpecific,
+					Direction:              zcl.DirectionClientToServer,
+					DisableDefaultResponse: true,
+				},
+				TransactionSequenceNum: 1,
+				CommandID:              cmdID,
+				ClusterID:              zcl.ClusterOnOff,
+				DestAddress:            dev.IEEE,
+				DestEndpoint:           ep,
+				SourceEndpoint:         1,
+			}
+			_ = c.adapter.SendZCL(ctx, frame)
+		case "brightness":
+			if bNum, ok := toUint8(v); ok {
+				frame := &zcl.Frame{
+					Header: zcl.FrameControl{
+						Type:                   zcl.FrameTypeClusterSpecific,
+						Direction:              zcl.DirectionClientToServer,
+						DisableDefaultResponse: true,
+					},
+					TransactionSequenceNum: 1,
+					CommandID:              0x04, // Move to Level with On/Off
+					ClusterID:              zcl.ClusterLevelControl,
+					DestAddress:            dev.IEEE,
+					DestEndpoint:           ep,
+					SourceEndpoint:         1,
+					Payload:                []byte{bNum, 0x0A, 0x00},
+				}
+				_ = c.adapter.SendZCL(ctx, frame)
+			}
+		}
+	}
+}
+
+func toUint8(v any) (uint8, bool) {
+	switch val := v.(type) {
+	case uint8:
+		return val, true
+	case int:
+		return uint8(val), true
+	case float64:
+		return uint8(val), true
+	default:
+		return 0, false
+	}
 }
 
 // Store returns the persistent DeviceStore manager.

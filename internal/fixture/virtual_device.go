@@ -337,6 +337,13 @@ func (v *VirtualDevice) ReportIASZone(status uint16) error {
 	return nil
 }
 
+// SetState updates simulated internal state attributes.
+func (v *VirtualDevice) SetState(updates map[string]any) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	maps.Copy(v.state, updates)
+}
+
 // GetState returns a snapshot of simulated device state.
 func (v *VirtualDevice) GetState() map[string]any {
 	v.mu.RLock()
@@ -346,4 +353,5 @@ func (v *VirtualDevice) GetState() map[string]any {
 	maps.Copy(cp, v.state)
 	return cp
 }
+
 

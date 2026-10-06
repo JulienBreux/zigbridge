@@ -1099,3 +1099,58 @@ func TestDualPhaseEnergyMeter(t *testing.T) {
 		t.Errorf("expected power_b=720, got: %v", dev.State["power_b"])
 	}
 }
+
+func TestControllerSetDeviceStateAndAction(t *testing.T) {
+	ctrl, _, mockMQTT := setupTestController(t)
+	ctx := t.Context()
+	if err := ctrl.Start(ctx); err != nil {
+		t.Fatalf("failed to start controller: %v", err)
+	}
+
+	const ieee = "0x00124B0011223344"
+	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{
+		IEEE: ieee,
+		NWK:  0x1122,
+	})
+
+	// 1. Set Device State
+	updates := map[string]any{
+		"state":      "ON",
+		"brightness": 200,
+	}
+	dev, err := ctrl.SetDeviceState(ctx, ieee, updates)
+	if err != nil {
+		t.Fatalf("failed to set device state: %v", err)
+	}
+	if dev.State["state"] != "ON" || dev.State["brightness"] != 200 {
+		t.Errorf("expected state ON and brightness 200, got: %v", dev.State)
+	}
+
+	// Verify MQTT published state
+	time.Sleep(30 * time.Millisecond)
+	published := mockMQTT.GetMessages()
+	foundMQTT := false
+	for _, m := range published {
+		if strings.Contains(m.Topic, ieee) && strings.Contains(string(m.Payload), "ON") {
+			foundMQTT = true
+			break
+		}
+	}
+	if !foundMQTT {
+		t.Error("expected MQTT publication with device state update")
+	}
+
+	// 2. Trigger Action
+	if err := ctrl.TriggerDeviceAction(ctx, ieee, "identify"); err != nil {
+		t.Fatalf("failed to trigger action: %v", err)
+	}
+
+	// 3. Error cases
+	if _, err := ctrl.SetDeviceState(ctx, "0xNONEXISTENT", updates); err == nil {
+		t.Error("expected error for non-existent device in SetDeviceState")
+	}
+	if err := ctrl.TriggerDeviceAction(ctx, "0xNONEXISTENT", "identify"); err == nil {
+		t.Error("expected error for non-existent device in TriggerDeviceAction")
+	}
+}
+

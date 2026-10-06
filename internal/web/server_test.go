@@ -505,3 +505,102 @@ func TestWebSimulationLab(t *testing.T) {
 		t.Errorf("expected battery %d, got %v", batt, vdev.GetState()["battery"])
 	}
 }
+
+func TestWebAPIDeviceDetail(t *testing.T) {
+	_, ctrl, baseURL := setupTestServer(t)
+
+	const ieee = "0x00158D00018899AA"
+	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{
+		IEEE: ieee,
+		NWK:  0x3456,
+	})
+	if dev, ok := ctrl.GetDevice(ieee); ok {
+		dev.Model = "TS0041"
+		dev.Manufacturer = "TuYa"
+	}
+
+	// 1. GET /api/devices/{ieee} - Found
+	resp, err := http.Get(baseURL + "/api/devices/" + ieee)
+	if err != nil {
+		t.Fatalf("failed to get device detail: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", resp.StatusCode)
+	}
+
+	var detail web.DeviceDetailResponse
+	if err := json.NewDecoder(resp.Body).Decode(&detail); err != nil {
+		t.Fatalf("failed to decode detail response: %v", err)
+	}
+	if detail.Device == nil || detail.Device.IEEE != ieee {
+		t.Fatalf("expected device IEEE %s, got %v", ieee, detail.Device)
+	}
+	if detail.Definition != nil && detail.Definition.Device.Model != "TS0041" {
+		t.Errorf("expected definition model TS0041, got %s", detail.Definition.Device.Model)
+	}
+
+	// 2. GET /api/devices/{ieee} - 404 Not Found
+	resp404, err := http.Get(baseURL + "/api/devices/0xNONEXISTENT")
+	if err != nil {
+		t.Fatalf("failed to call GET for nonexistent device: %v", err)
+	}
+	defer func() { _ = resp404.Body.Close() }()
+	if resp404.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404 Not Found, got %d", resp404.StatusCode)
+	}
+}
+
+func TestWebAPIDeviceSetStateAndAction(t *testing.T) {
+	_, ctrl, baseURL := setupTestServer(t)
+
+	const ieee = "0x00158D0001AABBCC"
+	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{
+		IEEE: ieee,
+		NWK:  0x5678,
+	})
+
+	// 1. POST /api/devices/{ieee}/set
+	setPayload := `{"state": "ON", "brightness": 128}`
+	respSet, err := http.Post(baseURL+"/api/devices/"+ieee+"/set", "application/json", strings.NewReader(setPayload))
+	if err != nil {
+		t.Fatalf("failed to post set state: %v", err)
+	}
+	defer func() { _ = respSet.Body.Close() }()
+
+	if respSet.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", respSet.StatusCode)
+	}
+
+	dev, ok := ctrl.GetDevice(ieee)
+	if !ok {
+		t.Fatalf("device %s not found", ieee)
+	}
+	if dev.State["state"] != "ON" || dev.State["brightness"] != float64(128) {
+		t.Errorf("expected state ON and brightness 128, got: %v", dev.State)
+	}
+
+	// 2. POST /api/devices/{ieee}/action
+	actionPayload := `{"action": "identify"}`
+	respAction, err := http.Post(baseURL+"/api/devices/"+ieee+"/action", "application/json", strings.NewReader(actionPayload))
+	if err != nil {
+		t.Fatalf("failed to post action: %v", err)
+	}
+	defer func() { _ = respAction.Body.Close() }()
+
+	if respAction.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", respAction.StatusCode)
+	}
+
+	// 3. Error handling: non-existent device set
+	respErr, err := http.Post(baseURL+"/api/devices/0xNONEXISTENT/set", "application/json", strings.NewReader(setPayload))
+	if err != nil {
+		t.Fatalf("failed to post set to nonexistent: %v", err)
+	}
+	defer func() { _ = respErr.Body.Close() }()
+	if respErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request for nonexistent device, got %d", respErr.StatusCode)
+	}
+}
+

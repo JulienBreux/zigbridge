@@ -19,6 +19,7 @@ import (
 	"github.com/julienbreux/zigbridge/internal/adapter"
 	"github.com/julienbreux/zigbridge/internal/config"
 	"github.com/julienbreux/zigbridge/internal/controller"
+	"github.com/julienbreux/zigbridge/internal/fixture"
 	"github.com/julienbreux/zigbridge/internal/zcl"
 )
 
@@ -155,7 +156,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/status", s.handleStatus)
 	mux.HandleFunc("POST /api/network/permit-join", s.handlePermitJoin)
 	mux.HandleFunc("GET /api/devices", s.handleGetDevices)
+	mux.HandleFunc("GET /api/devices/{ieee}", s.handleGetDeviceDetail)
 	mux.HandleFunc("POST /api/devices/{ieee}/rename", s.handleDeviceRename)
+	mux.HandleFunc("POST /api/devices/{ieee}/set", s.handleDeviceSetState)
+	mux.HandleFunc("POST /api/devices/{ieee}/action", s.handleDeviceAction)
 	mux.HandleFunc("GET /api/bindings", s.handleGetBindings)
 	mux.HandleFunc("POST /api/bindings", s.handleCreateBinding)
 	mux.HandleFunc("DELETE /api/bindings", s.handleDeleteBinding)
@@ -256,6 +260,103 @@ func (s *Server) handleDeviceRename(w http.ResponseWriter, r *http.Request) {
 		"success":       true,
 		"ieee":          ieee,
 		"friendly_name": body.FriendlyName,
+	})
+}
+
+// DeviceDetailResponse bundles device state and its fixture definition if available.
+type DeviceDetailResponse struct {
+	Device     *controller.Device        `json:"device"`
+	Definition *fixture.DeviceDefinition `json:"definition,omitempty"`
+}
+
+func (s *Server) handleGetDeviceDetail(w http.ResponseWriter, r *http.Request) {
+	ieee := r.PathValue("ieee")
+	if ieee == "" {
+		http.Error(w, `{"error":"missing ieee path parameter"}`, http.StatusBadRequest)
+		return
+	}
+
+	dev, ok := s.controller.GetDevice(ieee)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "device not found"})
+		return
+	}
+
+	resp := DeviceDetailResponse{
+		Device: dev,
+	}
+
+	if s.controller.Fixtures() != nil && dev.Model != "" {
+		if def, found := s.controller.Fixtures().Get(dev.Model); found {
+			resp.Definition = def
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (s *Server) handleDeviceSetState(w http.ResponseWriter, r *http.Request) {
+	ieee := r.PathValue("ieee")
+	if ieee == "" {
+		http.Error(w, `{"error":"missing ieee path parameter"}`, http.StatusBadRequest)
+		return
+	}
+
+	var updates map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	updatedDev, err := s.controller.SetDeviceState(r.Context(), ieee, updates)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"device":  updatedDev,
+	})
+}
+
+func (s *Server) handleDeviceAction(w http.ResponseWriter, r *http.Request) {
+	ieee := r.PathValue("ieee")
+	if ieee == "" {
+		http.Error(w, `{"error":"missing ieee path parameter"}`, http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	if body.Action == "" {
+		http.Error(w, `{"error":"action cannot be empty"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := s.controller.TriggerDeviceAction(r.Context(), ieee, body.Action); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"action":  body.Action,
 	})
 }
 
