@@ -90,4 +90,29 @@ func TestHADiscoveryGeneration(t *testing.T) {
 	if trigTopic != expectedTrigTopic {
 		t.Errorf("expected trigger topic %s, got %s", expectedTrigTopic, trigTopic)
 	}
+
+	// Test Power Discovery
+	powConfig := mqtt.NewPowerDiscovery(dev, "0x00158D0001", "zigbridge")
+	if powConfig.DeviceClass != "power" || powConfig.UnitOfMeasurement != "W" {
+		t.Errorf("unexpected power config: %+v", powConfig)
+	}
+
+	// Test Energy Discovery
+	energyConfig := mqtt.NewEnergyDiscovery(dev, "0x00158D0001", "zigbridge")
+	if energyConfig.DeviceClass != "energy" || energyConfig.UnitOfMeasurement != "kWh" {
+		t.Errorf("unexpected energy config: %+v", energyConfig)
+	}
+
+	// Test Current Discovery
+	currConfig := mqtt.NewCurrentDiscovery(dev, "0x00158D0001", "zigbridge")
+	if currConfig.DeviceClass != "current" || currConfig.UnitOfMeasurement != "A" {
+		t.Errorf("unexpected current config: %+v", currConfig)
+	}
+
+	// Test Mains Voltage Discovery
+	mainsVoltConfig := mqtt.NewMainsVoltageDiscovery(dev, "0x00158D0001", "zigbridge")
+	if mainsVoltConfig.DeviceClass != "voltage" || mainsVoltConfig.UnitOfMeasurement != "V" {
+		t.Errorf("unexpected mains voltage config: %+v", mainsVoltConfig)
+	}
 }
+

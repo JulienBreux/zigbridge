@@ -125,6 +125,7 @@ const (
 	TypeUint16     uint8 = 0x21
 	TypeUint24     uint8 = 0x22
 	TypeUint32     uint8 = 0x23
+	TypeUint48     uint8 = 0x25
 	TypeInt8       uint8 = 0x28
 	TypeInt16      uint8 = 0x29
 	TypeInt32      uint8 = 0x2B

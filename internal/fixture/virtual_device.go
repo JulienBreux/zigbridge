@@ -225,6 +225,84 @@ func (v *VirtualDevice) ReportTemperatureHumidity(tempC float64, humidityPct flo
 	return nil
 }
 
+// ReportElectrical simulates electrical telemetry reports (power, voltage, current, and energy).
+func (v *VirtualDevice) ReportElectrical(powerW float64, voltageV float64, currentA float64, energyKWh float64) error {
+	if v.emitter == nil {
+		return fmt.Errorf("no frame emitter attached to virtual device")
+	}
+
+	v.mu.Lock()
+	v.seq++
+	seq := v.seq
+	v.state["power"] = powerW
+	v.state["voltage"] = voltageV
+	v.state["current"] = currentA
+	v.state["energy"] = energyKWh
+	v.mu.Unlock()
+
+	// 1. Electrical Measurement report (Cluster 0x0B04)
+	// Attr 0x050B: ActivePower (uint16)
+	// Attr 0x0505: RMSVoltage (uint16)
+	// Attr 0x0508: RMSCurrent (uint16)
+	var emPayload []byte
+
+	// Attr 0x050B: ActivePower (TypeUint16)
+	emPayload = append(emPayload, 0x0B, 0x05, zcl.TypeUint16, 0x00, 0x00)
+	binary.LittleEndian.PutUint16(emPayload[3:5], uint16(powerW))
+
+	// Attr 0x0505: RMSVoltage (TypeUint16)
+	emPayload = append(emPayload, 0x05, 0x05, zcl.TypeUint16, 0x00, 0x00)
+	binary.LittleEndian.PutUint16(emPayload[8:10], uint16(voltageV))
+
+	// Attr 0x0508: RMSCurrent (TypeUint16)
+	emPayload = append(emPayload, 0x08, 0x05, zcl.TypeUint16, 0x00, 0x00)
+	binary.LittleEndian.PutUint16(emPayload[13:15], uint16(currentA))
+
+	v.emitter.EmitFrame(&zcl.Frame{
+		Header: zcl.FrameControl{
+			Type:      zcl.FrameTypeGlobal,
+			Direction: zcl.DirectionServerToClient,
+		},
+		TransactionSequenceNum: seq,
+		CommandID:              zcl.CmdReportAttributes,
+		ClusterID:              zcl.ClusterElectricalMeasurement,
+		SourceAddress:          v.IEEE,
+		SourceEndpoint:         1,
+		DestEndpoint:           1,
+		LQI:                    255,
+		Payload:                emPayload,
+	})
+
+	// 2. Metering report (Cluster 0x0702)
+	// Attr 0x0000: CurrentSummationDelivered (TypeUint48)
+	var metPayload []byte
+	metPayload = append(metPayload, 0x00, 0x00, zcl.TypeUint48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00)
+	energyRaw := uint64(energyKWh)
+	metPayload[3] = byte(energyRaw)
+	metPayload[4] = byte(energyRaw >> 8)
+	metPayload[5] = byte(energyRaw >> 16)
+	metPayload[6] = byte(energyRaw >> 24)
+	metPayload[7] = byte(energyRaw >> 32)
+	metPayload[8] = byte(energyRaw >> 40)
+
+	v.emitter.EmitFrame(&zcl.Frame{
+		Header: zcl.FrameControl{
+			Type:      zcl.FrameTypeGlobal,
+			Direction: zcl.DirectionServerToClient,
+		},
+		TransactionSequenceNum: seq + 1,
+		CommandID:              zcl.CmdReportAttributes,
+		ClusterID:              zcl.ClusterMetering,
+		SourceAddress:          v.IEEE,
+		SourceEndpoint:         1,
+		DestEndpoint:           1,
+		LQI:                    255,
+		Payload:                metPayload,
+	})
+
+	return nil
+}
+
 // GetState returns a snapshot of simulated device state.
 func (v *VirtualDevice) GetState() map[string]interface{} {
 	v.mu.RLock()

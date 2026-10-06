@@ -503,3 +503,116 @@ func TestVirtualSNZB01PSimulation(t *testing.T) {
 	}
 }
 
+func TestVirtualA7ZSimulation(t *testing.T) {
+	ctrl, _, mockMQTT := setupTestController(t)
+	ctx := context.Background()
+	if err := ctrl.Start(ctx); err != nil {
+		t.Fatalf("failed to start controller: %v", err)
+	}
+	defer func() { _ = ctrl.Stop() }()
+
+	fixtures := ctrl.Fixtures()
+	if fixtures == nil {
+		t.Fatal("expected fixtures registry in controller")
+	}
+	def, ok := fixtures.Get("A7Z")
+	if !ok {
+		t.Fatal("A7Z fixture definition not found in controller registry")
+	}
+
+	const ieee = "0x00124b0099887766"
+	const nwk = 0x5678
+	vdev, err := ctrl.SpawnVirtualDevice(def, ieee, nwk)
+	if err != nil {
+		t.Fatalf("failed to spawn virtual device: %v", err)
+	}
+	if vdev == nil {
+		t.Fatal("expected spawned virtual device to be non-nil")
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	dev, found := ctrl.GetDevice(ieee)
+	if !found {
+		t.Fatalf("device %s not found in controller", ieee)
+	}
+	if dev.Manufacturer != "Nous" {
+		t.Errorf("expected manufacturer Nous, got %s", dev.Manufacturer)
+	}
+	if dev.Model != "A7Z" {
+		t.Errorf("expected model A7Z, got %s", dev.Model)
+	}
+
+	// Verify Home Assistant discovery published
+	messages := mockMQTT.GetMessages()
+	hasSwitchDiscovery := false
+	hasPowerDiscovery := false
+	hasCurrentDiscovery := false
+	hasVoltageDiscovery := false
+	hasEnergyDiscovery := false
+	for _, msg := range messages {
+		if strings.Contains(msg.Topic, "homeassistant/switch/") {
+			hasSwitchDiscovery = true
+		}
+		if strings.Contains(msg.Topic, "homeassistant/sensor/") && strings.Contains(msg.Topic, "_power/config") {
+			hasPowerDiscovery = true
+		}
+		if strings.Contains(msg.Topic, "homeassistant/sensor/") && strings.Contains(msg.Topic, "_current/config") {
+			hasCurrentDiscovery = true
+		}
+		if strings.Contains(msg.Topic, "homeassistant/sensor/") && strings.Contains(msg.Topic, "_voltage/config") {
+			hasVoltageDiscovery = true
+		}
+		if strings.Contains(msg.Topic, "homeassistant/sensor/") && strings.Contains(msg.Topic, "_energy/config") {
+			hasEnergyDiscovery = true
+		}
+	}
+	if !hasSwitchDiscovery {
+		t.Error("expected switch discovery message in MQTT")
+	}
+	if !hasPowerDiscovery {
+		t.Error("expected power discovery message in MQTT")
+	}
+	if !hasCurrentDiscovery {
+		t.Error("expected current discovery message in MQTT")
+	}
+	if !hasVoltageDiscovery {
+		t.Error("expected voltage discovery message in MQTT")
+	}
+	if !hasEnergyDiscovery {
+		t.Error("expected energy discovery message in MQTT")
+	}
+
+	// Test ReportElectrical(1500, 230, 6, 12)
+	if err := vdev.ReportElectrical(1500, 230, 6, 12); err != nil {
+		t.Fatalf("failed to report electrical telemetry: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	foundElectrical := false
+	for _, m := range mockMQTT.GetMessages() {
+		if m.Topic == "zigbridge/"+ieee &&
+			strings.Contains(string(m.Payload), `"power":1500`) &&
+			strings.Contains(string(m.Payload), `"voltage":230`) &&
+			strings.Contains(string(m.Payload), `"current":6`) {
+			foundElectrical = true
+			break
+		}
+	}
+	if !foundElectrical {
+		t.Error("expected MQTT message with power, voltage, and current")
+	}
+
+	foundEnergy := false
+	for _, m := range mockMQTT.GetMessages() {
+		if m.Topic == "zigbridge/"+ieee && strings.Contains(string(m.Payload), `"energy":12`) {
+			foundEnergy = true
+			break
+		}
+	}
+	if !foundEnergy {
+		t.Error("expected MQTT message with energy:12")
+	}
+}
+
+

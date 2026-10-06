@@ -126,6 +126,51 @@ func NewPowerDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	}
 }
 
+// NewEnergyDiscovery builds HA discovery for total energy delivered (kWh).
+func NewEnergyDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "sensor",
+		UniqueID:          fmt.Sprintf("%s_energy", ieee),
+		Name:              fmt.Sprintf("%s Energy", device.Name),
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:     "{{ value_json.energy }}",
+		DeviceClass:       "energy",
+		UnitOfMeasurement: "kWh",
+		Device:            device,
+		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+	}
+}
+
+// NewCurrentDiscovery builds HA discovery for electrical current (A).
+func NewCurrentDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "sensor",
+		UniqueID:          fmt.Sprintf("%s_current", ieee),
+		Name:              fmt.Sprintf("%s Current", device.Name),
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:     "{{ value_json.current }}",
+		DeviceClass:       "current",
+		UnitOfMeasurement: "A",
+		Device:            device,
+		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+	}
+}
+
+// NewMainsVoltageDiscovery builds HA discovery for AC mains voltage (V).
+func NewMainsVoltageDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "sensor",
+		UniqueID:          fmt.Sprintf("%s_voltage", ieee),
+		Name:              fmt.Sprintf("%s Voltage", device.Name),
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:     "{{ value_json.voltage }}",
+		DeviceClass:       "voltage",
+		UnitOfMeasurement: "V",
+		Device:            device,
+		AvailabilityTopic: fmt.Sprintf("%s/bridge/state", baseTopic),
+	}
+}
+
 // NewBatteryDiscovery builds HA discovery for a battery sensor.
 func NewBatteryDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
 	return HAEntityConfig{

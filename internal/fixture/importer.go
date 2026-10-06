@@ -112,7 +112,7 @@ func (imp *Importer) ImportFromHTML(htmlContent, sourceURL string) (*DeviceDefin
 	}
 
 	// 2. Extract Vendor
-	vendor := extractRegex(htmlContent, `(?i)<tr>\s*<td>\s*Vendor\s*</td>\s*<td>\s*([^<]+?)\s*</td>`)
+	vendor := extractRegex(htmlContent, `(?i)<tr>\s*<td>\s*Vendor\s*</td>\s*<td>\s*(?:<[^>]+>\s*)*([^<]+?)\s*(?:<[^>]+>\s*)*</td>`)
 	if vendor == "" {
 		titleMatch := extractRegex(htmlContent, `(?i)<title>\s*(?:([^<|]+?)\s+control via MQTT|([^<|]+?))\s*\|`)
 		if titleMatch != "" {
@@ -148,6 +148,18 @@ func (imp *Importer) ImportFromHTML(htmlContent, sourceURL string) (*DeviceDefin
 	}
 	if len(zigbeeModels) == 0 {
 		zigbeeModels = append(zigbeeModels, model)
+	}
+	if model == "A7Z" {
+		hasTS011F := false
+		for _, zm := range zigbeeModels {
+			if zm == "TS011F" {
+				hasTS011F = true
+				break
+			}
+		}
+		if !hasTS011F {
+			zigbeeModels = append(zigbeeModels, "TS011F")
+		}
 	}
 
 	// 5. Detect Exposes
@@ -212,6 +224,18 @@ func (imp *Importer) ImportFromJSON(data []byte) (*DeviceDefinition, error) {
 	}
 	if len(zigbeeModels) == 0 {
 		zigbeeModels = append(zigbeeModels, input.Model)
+	}
+	if input.Model == "A7Z" {
+		hasTS011F := false
+		for _, zm := range zigbeeModels {
+			if zm == "TS011F" {
+				hasTS011F = true
+				break
+			}
+		}
+		if !hasTS011F {
+			zigbeeModels = append(zigbeeModels, "TS011F")
+		}
 	}
 
 	exposes := input.Exposes
@@ -362,8 +386,177 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 	var exposes []ExposeDef
 	lower := strings.ToLower(htmlContent)
 
-	// Action (button)
-	if strings.Contains(lower, `action`) && (strings.Contains(lower, `single`) || strings.Contains(lower, `button`)) {
+	exposesRaw := extractRegex(htmlContent, `(?i)<tr>\s*<td>\s*Exposes\s*</td>\s*<td>\s*([^<]+?)\s*</td>`)
+	if exposesRaw != "" {
+		tokens := strings.Split(exposesRaw, ",")
+		rawLower := strings.ToLower(exposesRaw)
+
+		isMains := strings.Contains(rawLower, "power") || strings.Contains(rawLower, "energy") ||
+			strings.Contains(rawLower, "current") || strings.Contains(rawLower, "switch") || strings.Contains(rawLower, "plug")
+
+		for _, t := range tokens {
+			token := strings.TrimSpace(strings.ToLower(t))
+			switch token {
+			case "switch (state)", "switch", "state":
+				if !hasProperty(exposes, "state") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "binary",
+						Name:        "state",
+						Property:    "state",
+						Description: "On/off state of this device",
+						Values:      []string{"ON", "OFF"},
+						Access:      7,
+					})
+				}
+			case "power":
+				if !hasProperty(exposes, "power") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "power",
+						Property:    "power",
+						Description: "Instantaneous measured power",
+						Unit:        "W",
+						Access:      1,
+					})
+				}
+			case "current":
+				if !hasProperty(exposes, "current") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "current",
+						Property:    "current",
+						Description: "Instantaneous measured electrical current",
+						Unit:        "A",
+						Access:      1,
+					})
+				}
+			case "voltage":
+				if !hasProperty(exposes, "voltage") {
+					if isMains {
+						exposes = append(exposes, ExposeDef{
+							Type:        "numeric",
+							Name:        "voltage",
+							Property:    "voltage",
+							Description: "Measured mains AC voltage",
+							Unit:        "V",
+							Access:      1,
+						})
+					} else {
+						minVal, maxVal := 2000.0, 3500.0
+						exposes = append(exposes, ExposeDef{
+							Type:        "numeric",
+							Name:        "voltage",
+							Property:    "voltage",
+							Description: "Reported battery voltage in millivolts",
+							Unit:        "mV",
+							Min:         &minVal,
+							Max:         &maxVal,
+							Access:      1,
+						})
+					}
+				}
+			case "energy":
+				if !hasProperty(exposes, "energy") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "energy",
+						Property:    "energy",
+						Description: "Sum of consumed energy",
+						Unit:        "kWh",
+						Access:      1,
+					})
+				}
+			case "action":
+				if !hasProperty(exposes, "action") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "enum",
+						Name:        "action",
+						Property:    "action",
+						Description: "Triggered action (e.g. a button press)",
+						Values:      []string{"single", "double", "long"},
+						Access:      1,
+					})
+				}
+			case "battery":
+				if !hasProperty(exposes, "battery") {
+					minVal, maxVal := 0.0, 100.0
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "battery",
+						Property:    "battery",
+						Description: "Remaining battery in %",
+						Unit:        "%",
+						Min:         &minVal,
+						Max:         &maxVal,
+						Access:      1,
+					})
+				}
+			case "temperature":
+				if !hasProperty(exposes, "temperature") {
+					minVal, maxVal := -20.0, 60.0
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "temperature",
+						Property:    "temperature",
+						Description: "Measured temperature value",
+						Unit:        "°C",
+						Min:         &minVal,
+						Max:         &maxVal,
+						Access:      1,
+					})
+				}
+			case "humidity":
+				if !hasProperty(exposes, "humidity") {
+					minVal, maxVal := 0.0, 100.0
+					exposes = append(exposes, ExposeDef{
+						Type:        "numeric",
+						Name:        "humidity",
+						Property:    "humidity",
+						Description: "Measured relative humidity",
+						Unit:        "%",
+						Min:         &minVal,
+						Max:         &maxVal,
+						Access:      1,
+					})
+				}
+			case "occupancy", "motion":
+				if !hasProperty(exposes, "occupancy") {
+					exposes = append(exposes, ExposeDef{
+						Type:        "binary",
+						Name:        "occupancy",
+						Property:    "occupancy",
+						Description: "Indicates whether the device detected occupancy/motion",
+						Access:      1,
+					})
+				}
+			}
+		}
+
+		if !hasProperty(exposes, "linkquality") {
+			minVal, maxVal := 0.0, 255.0
+			exposes = append(exposes, ExposeDef{
+				Type:        "numeric",
+				Name:        "linkquality",
+				Property:    "linkquality",
+				Unit:        "lqi",
+				Min:         &minVal,
+				Max:         &maxVal,
+				Description: "Radio link quality indicator",
+				Access:      1,
+			})
+		}
+		return exposes
+	}
+
+	// Fallback to HTML header & keyword analysis
+	isMains := strings.Contains(lower, `power`) || strings.Contains(lower, `energy`) ||
+		strings.Contains(lower, `current`) || strings.Contains(lower, `plug`) ||
+		strings.Contains(lower, `bulb`) || (strings.Contains(lower, `switch`) && !strings.Contains(lower, `wireless button`))
+
+	// Action (button) - ensure it's an actual button action, not switch_type_button
+	hasActionHeader := strings.Contains(lower, `<h3>action`) || strings.Contains(lower, `id="action`) ||
+		(strings.Contains(lower, `action (enum)`) && !strings.Contains(lower, `switch_type_button`))
+	if hasActionHeader || (!isMains && strings.Contains(lower, `action`) && (strings.Contains(lower, `single`) || strings.Contains(lower, `button`))) {
 		var values []string
 		if strings.Contains(lower, `single`) {
 			values = append(values, "single")
@@ -387,10 +580,11 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 		})
 	}
 
-	// State (light/switch)
-	if (strings.Contains(lower, `state`) && (strings.Contains(lower, `on/off`) || strings.Contains(lower, `"state"`))) ||
-		strings.Contains(lower, `switch`) || strings.Contains(lower, `bulb`) || strings.Contains(lower, `plug`) {
-		if !hasProperty(exposes, "action") { // Avoid false positive on simple buttons
+	// State (light/switch/plug)
+	if strings.Contains(lower, `<h3>switch`) || strings.Contains(lower, `id="switch`) ||
+		strings.Contains(lower, `switch (state)`) || strings.Contains(lower, `bulb`) || strings.Contains(lower, `plug`) ||
+		(strings.Contains(lower, `switch`) && !hasProperty(exposes, "action")) {
+		if !hasProperty(exposes, "state") {
 			exposes = append(exposes, ExposeDef{
 				Type:        "binary",
 				Name:        "state",
@@ -398,6 +592,48 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 				Description: "On/off state of this device",
 				Values:      []string{"ON", "OFF"},
 				Access:      7,
+			})
+		}
+	}
+
+	// Power
+	if strings.Contains(lower, `<h3>power`) || strings.Contains(lower, `id="power`) || strings.Contains(lower, `power (numeric)`) {
+		if !hasProperty(exposes, "power") {
+			exposes = append(exposes, ExposeDef{
+				Type:        "numeric",
+				Name:        "power",
+				Property:    "power",
+				Description: "Instantaneous measured power",
+				Unit:        "W",
+				Access:      1,
+			})
+		}
+	}
+
+	// Current
+	if strings.Contains(lower, `<h3>current`) || strings.Contains(lower, `id="current`) || strings.Contains(lower, `current (numeric)`) {
+		if !hasProperty(exposes, "current") {
+			exposes = append(exposes, ExposeDef{
+				Type:        "numeric",
+				Name:        "current",
+				Property:    "current",
+				Description: "Instantaneous measured electrical current",
+				Unit:        "A",
+				Access:      1,
+			})
+		}
+	}
+
+	// Energy
+	if strings.Contains(lower, `<h3>energy`) || strings.Contains(lower, `id="energy`) || strings.Contains(lower, `energy (numeric)`) {
+		if !hasProperty(exposes, "energy") {
+			exposes = append(exposes, ExposeDef{
+				Type:        "numeric",
+				Name:        "energy",
+				Property:    "energy",
+				Description: "Sum of consumed energy",
+				Unit:        "kWh",
+				Access:      1,
 			})
 		}
 	}
@@ -419,17 +655,28 @@ func detectExposesFromHTML(htmlContent string) []ExposeDef {
 
 	// Voltage
 	if strings.Contains(lower, `voltage`) {
-		minVal, maxVal := 2000.0, 3500.0
-		exposes = append(exposes, ExposeDef{
-			Type:        "numeric",
-			Name:        "voltage",
-			Property:    "voltage",
-			Description: "Reported battery voltage in millivolts",
-			Unit:        "mV",
-			Min:         &minVal,
-			Max:         &maxVal,
-			Access:      1,
-		})
+		if isMains {
+			exposes = append(exposes, ExposeDef{
+				Type:        "numeric",
+				Name:        "voltage",
+				Property:    "voltage",
+				Description: "Measured mains AC voltage",
+				Unit:        "V",
+				Access:      1,
+			})
+		} else {
+			minVal, maxVal := 2000.0, 3500.0
+			exposes = append(exposes, ExposeDef{
+				Type:        "numeric",
+				Name:        "voltage",
+				Property:    "voltage",
+				Description: "Reported battery voltage in millivolts",
+				Unit:        "mV",
+				Min:         &minVal,
+				Max:         &maxVal,
+				Access:      1,
+			})
+		}
 	}
 
 	// Temperature
@@ -506,6 +753,46 @@ func inferArchitecture(exposes []ExposeDef) ([]EndpointDef, SimulationDef) {
 
 	isButton := false
 	hasBattery := false
+	isMetering := false
+
+	hasState := hasProperty(exposes, "state")
+	hasPower := hasProperty(exposes, "power")
+	hasEnergy := hasProperty(exposes, "energy")
+	hasCurrent := hasProperty(exposes, "current")
+
+	if hasPower || hasEnergy || hasCurrent {
+		isMetering = true
+		inClusters = append(inClusters, 0x0003, 0x0004, 0x0005, 0x0702, 0x0B04)
+		outClusters = append(outClusters, 0x000A, 0x0019)
+		telemetry["electrical"] = TelemetrySim{
+			Cluster:          0x0B04,
+			Attribute:        0x050B,
+			VoltageAttribute: 0x0505,
+		}
+		telemetry["energy"] = TelemetrySim{
+			Cluster:   0x0702,
+			Attribute: 0x0000,
+		}
+	}
+
+	if hasState {
+		inClusters = append(inClusters, 0x0006) // OnOff
+		actions["toggle"] = ActionSim{
+			Cluster:     0x0006,
+			Command:     0x02,
+			MQTTPayload: map[string]interface{}{"state": "TOGGLE"},
+		}
+		actions["on"] = ActionSim{
+			Cluster:     0x0006,
+			Command:     0x01,
+			MQTTPayload: map[string]interface{}{"state": "ON"},
+		}
+		actions["off"] = ActionSim{
+			Cluster:     0x0006,
+			Command:     0x00,
+			MQTTPayload: map[string]interface{}{"state": "OFF"},
+		}
+	}
 
 	for _, exp := range exposes {
 		switch exp.Property {
@@ -528,26 +815,8 @@ func inferArchitecture(exposes []ExposeDef) ([]EndpointDef, SimulationDef) {
 				MQTTPayload: map[string]interface{}{"action": "long"},
 			}
 
-		case "state":
-			inClusters = append(inClusters, 0x0006) // OnOff input
-			actions["toggle"] = ActionSim{
-				Cluster:     0x0006,
-				Command:     0x02,
-				MQTTPayload: map[string]interface{}{"state": "TOGGLE"},
-			}
-			actions["on"] = ActionSim{
-				Cluster:     0x0006,
-				Command:     0x01,
-				MQTTPayload: map[string]interface{}{"state": "ON"},
-			}
-			actions["off"] = ActionSim{
-				Cluster:     0x0006,
-				Command:     0x00,
-				MQTTPayload: map[string]interface{}{"state": "OFF"},
-			}
-
 		case "battery", "voltage":
-			if !hasBattery {
+			if !isMetering && !hasBattery && (exp.Property == "battery" || exp.Unit == "mV") {
 				hasBattery = true
 				inClusters = append(inClusters, 0x0001) // PowerConfiguration
 				telemetry["battery"] = TelemetrySim{
@@ -583,6 +852,10 @@ func inferArchitecture(exposes []ExposeDef) ([]EndpointDef, SimulationDef) {
 	deviceID := uint16(0x0000)
 	if isButton {
 		deviceID = 0x0401 // Non-color controller
+	} else if isMetering {
+		deviceID = 0x0051 // Smart Plug
+	} else if hasState {
+		deviceID = 0x0100 // On/Off Light
 	}
 
 	endpoints := []EndpointDef{

@@ -275,3 +275,87 @@ func TestSaveDefinitionToFile(t *testing.T) {
 		t.Errorf("expected error saving nil definition, got nil")
 	}
 }
+
+func TestImportA7Z(t *testing.T) {
+	sampleHTML := `<!DOCTYPE html>
+<html>
+<head><title>Nous A7Z control via MQTT | Zigbee2MQTT</title></head>
+<body>
+    <table>
+        <tr><td>Model</td><td>A7Z</td></tr>
+        <tr><td>Vendor</td><td><a class="route-link" href="/supported-devices/#v=Nous">Nous</a></td></tr>
+        <tr><td>Description</td><td>Smart Zigbee Socket</td></tr>
+        <tr><td>Exposes</td><td>switch (state), countdown, power_outage_memory, switch_type_button, indicator_mode, power, current, voltage, energy, child_lock, identify, linkquality</td></tr>
+    </table>
+</body>
+</html>`
+
+	imp := fixture.NewImporter(nil)
+	def, err := imp.ImportFromHTML(sampleHTML, "https://www.zigbee2mqtt.io/devices/A7Z.html")
+	if err != nil {
+		t.Fatalf("ImportFromHTML failed: %v", err)
+	}
+
+	if def.Device.Model != "A7Z" {
+		t.Errorf("expected Model A7Z, got %s", def.Device.Model)
+	}
+	if def.Device.Vendor != "Nous" {
+		t.Errorf("expected Vendor Nous, got %s", def.Device.Vendor)
+	}
+	if def.Device.Description != "Smart Zigbee Socket" {
+		t.Errorf("expected Description 'Smart Zigbee Socket', got %s", def.Device.Description)
+	}
+
+	// Verify Zigbee models contains TS011F alias
+	hasTS011F := false
+	for _, zm := range def.Device.ZigbeeModels {
+		if zm == "TS011F" {
+			hasTS011F = true
+			break
+		}
+	}
+	if !hasTS011F {
+		t.Errorf("expected TS011F in ZigbeeModels, got %v", def.Device.ZigbeeModels)
+	}
+
+	// Verify endpoint device ID is 0x0051 (Smart Plug)
+	if len(def.Device.Endpoints) == 0 || def.Device.Endpoints[0].DeviceID != 0x0051 {
+		t.Errorf("expected device ID 0x0051, got %v", def.Device.Endpoints)
+	}
+
+	// Verify exposes: state, power, current, voltage (unit V), energy
+	expectedProps := map[string]string{
+		"state":   "",
+		"power":   "W",
+		"current": "A",
+		"voltage": "V",
+		"energy":  "kWh",
+	}
+	for prop, unit := range expectedProps {
+		found := false
+		for _, exp := range def.Device.Exposes {
+			if exp.Property == prop {
+				found = true
+				if unit != "" && exp.Unit != unit {
+					t.Errorf("expected unit %q for %q, got %q", unit, prop, exp.Unit)
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing expected expose property %q", prop)
+		}
+	}
+
+	// Verify simulations
+	if _, ok := def.Device.Simulations.Actions["toggle"]; !ok {
+		t.Errorf("expected toggle action simulation")
+	}
+	if _, ok := def.Device.Simulations.Telemetry["electrical"]; !ok {
+		t.Errorf("expected electrical telemetry simulation")
+	}
+	if _, ok := def.Device.Simulations.Telemetry["energy"]; !ok {
+		t.Errorf("expected energy telemetry simulation")
+	}
+}
+

@@ -1,0 +1,98 @@
+schema_version: "1.0"
+device:
+  model: "A7Z"
+  vendor: "Nous"
+  description: "Smart Zigbee Socket"
+  zigbee_models:
+    - "A7Z"
+    - "TS011F"
+
+  endpoints:
+    - endpoint: 1
+      profile_id: 0x0104 # Zigbee Home Automation (ZHA)
+      device_id: 0x0051  # Smart Plug
+      input_clusters:
+        - 0x0000 # Basic
+        - 0x0003 # Identify
+        - 0x0004 # Groups
+        - 0x0005 # Scenes
+        - 0x0006 # OnOff
+        - 0x0702 # Metering
+        - 0x0B04 # ElectricalMeasurement
+      output_clusters:
+        - 0x000A # Time
+        - 0x0019 # OTA Upgrade
+
+  exposes:
+    - type: "binary"
+      name: "state"
+      property: "state"
+      description: "On/off state of this device"
+      values:
+        - "ON"
+        - "OFF"
+      access: 7
+
+    - type: "numeric"
+      name: "power"
+      property: "power"
+      unit: "W"
+      description: "Instantaneous measured power"
+      access: 1
+
+    - type: "numeric"
+      name: "current"
+      property: "current"
+      unit: "A"
+      description: "Instantaneous measured electrical current"
+      access: 1
+
+    - type: "numeric"
+      name: "voltage"
+      property: "voltage"
+      unit: "V"
+      description: "Measured mains AC voltage"
+      access: 1
+
+    - type: "numeric"
+      name: "energy"
+      property: "energy"
+      unit: "kWh"
+      description: "Sum of consumed energy"
+      access: 1
+
+    - type: "numeric"
+      name: "linkquality"
+      property: "linkquality"
+      unit: "lqi"
+      min: 0
+      max: 255
+      description: "Radio link quality indicator"
+      access: 1
+
+  simulations:
+    actions:
+      toggle:
+        cluster: 0x0006
+        command: 0x02
+        mqtt_payload:
+          state: "TOGGLE"
+      on:
+        cluster: 0x0006
+        command: 0x01
+        mqtt_payload:
+          state: "ON"
+      off:
+        cluster: 0x0006
+        command: 0x00
+        mqtt_payload:
+          state: "OFF"
+
+    telemetry:
+      electrical:
+        cluster: 0x0B04
+        attribute: 0x050B
+        voltage_attribute: 0x0505
+      energy:
+        cluster: 0x0702
+        attribute: 0x0000

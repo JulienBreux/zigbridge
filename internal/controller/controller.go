@@ -324,8 +324,30 @@ func (c *Controller) HandleIncomingFrame(frame *zcl.Frame) {
 						stateUpdates["occupancy"] = b
 					}
 				case zcl.ClusterElectricalMeasurement:
-					if val, ok := rec.Value.(uint16); ok {
-						stateUpdates["power"] = val
+					switch rec.AttributeID {
+					case 0x0505: // RMSVoltage (V)
+						if v, ok := toFloat64(rec.Value); ok {
+							stateUpdates["voltage"] = v
+						}
+					case 0x0508: // RMSCurrent (A)
+						if v, ok := toFloat64(rec.Value); ok {
+							stateUpdates["current"] = v
+						}
+					case 0x050B: // ActivePower (W)
+						if v, ok := toFloat64(rec.Value); ok {
+							stateUpdates["power"] = v
+						}
+					default:
+						if v, ok := toFloat64(rec.Value); ok {
+							stateUpdates["power"] = v
+						}
+					}
+				case zcl.ClusterMetering:
+					switch rec.AttributeID {
+					case 0x0000: // CurrentSummationDelivered (kWh)
+						if v, ok := toFloat64(rec.Value); ok {
+							stateUpdates["energy"] = v
+						}
 					}
 				case zcl.ClusterPowerConfiguration:
 					if val, ok := rec.Value.(uint8); ok {
@@ -694,10 +716,22 @@ func (c *Controller) publishDeviceDiscovery(dev *Device) {
 		}
 	}
 
+	// Electrical Measurement & Metering
+	if hasInCluster(zcl.ClusterElectricalMeasurement) {
+		_ = c.mqtt.PublishDiscovery(mqtt.NewPowerDiscovery(haDev, dev.IEEE, baseTopic))
+		_ = c.mqtt.PublishDiscovery(mqtt.NewCurrentDiscovery(haDev, dev.IEEE, baseTopic))
+		_ = c.mqtt.PublishDiscovery(mqtt.NewMainsVoltageDiscovery(haDev, dev.IEEE, baseTopic))
+	}
+	if hasInCluster(zcl.ClusterMetering) {
+		_ = c.mqtt.PublishDiscovery(mqtt.NewEnergyDiscovery(haDev, dev.IEEE, baseTopic))
+	}
+
 	// Power & Battery
 	if hasInCluster(zcl.ClusterPowerConfiguration) || dev.Battery > 0 {
 		_ = c.mqtt.PublishDiscovery(mqtt.NewBatteryDiscovery(haDev, dev.IEEE, baseTopic))
-		_ = c.mqtt.PublishDiscovery(mqtt.NewVoltageDiscovery(haDev, dev.IEEE, baseTopic))
+		if !hasInCluster(zcl.ClusterElectricalMeasurement) {
+			_ = c.mqtt.PublishDiscovery(mqtt.NewVoltageDiscovery(haDev, dev.IEEE, baseTopic))
+		}
 	}
 
 	// Temperature & Humidity
@@ -764,4 +798,33 @@ func (c *Controller) SetAnalyzer(a ai.Analyzer) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.analyzer = a
+}
+
+func toFloat64(val interface{}) (float64, bool) {
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case uint8:
+		return float64(v), true
+	case uint16:
+		return float64(v), true
+	case uint32:
+		return float64(v), true
+	case uint64:
+		return float64(v), true
+	case int8:
+		return float64(v), true
+	case int16:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	default:
+		return 0, false
+	}
 }

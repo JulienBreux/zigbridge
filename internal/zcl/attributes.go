@@ -78,6 +78,13 @@ func parseValue(dataType uint8, data []byte) (interface{}, int, error) {
 		}
 		return binary.LittleEndian.Uint32(data[0:4]), 4, nil
 
+	case TypeUint48:
+		if len(data) < 6 {
+			return nil, 0, ErrFrameTooShort
+		}
+		val := uint64(data[0]) | (uint64(data[1]) << 8) | (uint64(data[2]) << 16) | (uint64(data[3]) << 24) | (uint64(data[4]) << 32) | (uint64(data[5]) << 40)
+		return val, 6, nil
+
 	case TypeInt32:
 		if len(data) < 4 {
 			return nil, 0, ErrFrameTooShort
