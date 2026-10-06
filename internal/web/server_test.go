@@ -788,6 +788,3 @@ func TestWebAPIDevicesSortedByFriendlyName(t *testing.T) {
 		t.Errorf("expected devices sorted as %v, got %v", expected, names)
 	}
 }
-
-
-

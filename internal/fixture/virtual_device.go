@@ -353,5 +353,3 @@ func (v *VirtualDevice) GetState() map[string]any {
 	maps.Copy(cp, v.state)
 	return cp
 }
-
-

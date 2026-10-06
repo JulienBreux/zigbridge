@@ -338,4 +338,3 @@ func NewCustomSensorDiscovery(device HADevice, ieee, baseTopic, property, name, 
 		AvailabilityTopic: baseTopic + "/bridge/state",
 	}
 }
-

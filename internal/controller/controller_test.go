@@ -1256,4 +1256,3 @@ func TestControllerDisconnectedCoordinator(t *testing.T) {
 		t.Errorf("expected ErrCoordinatorNotConnected after disconnect on SetDeviceState, got: %v", err)
 	}
 }
-
