@@ -8,6 +8,8 @@ let currentMode = localStorage.getItem('zigbridge_mode') || 'simple';
 let permitJoinCountdownInterval = null;
 let permitJoinRemainingSeconds = 0;
 let ws = null;
+let isCoordinatorOnline = false;
+let lastCoordinatorOnlineState = null;
 
 // Cluster names mapping for human readability
 const CLUSTER_NAMES = {
@@ -129,10 +131,13 @@ async function loadStatus() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
-    // 1. Coordinator Status Pill
+    // 1. Coordinator Status Pill & Online State
+    const isOnline = Boolean(data.connected && (data.coordinator?.status === 'ready' || data.coordinator?.status === 'running'));
+    isCoordinatorOnline = isOnline;
+
     const coordPill = document.getElementById('coordinator-status-pill');
     const coordText = document.getElementById('coordinator-status-text');
-    if (data.connected && data.coordinator?.status === 'running') {
+    if (isOnline) {
       coordPill.className = 'badge badge-connected';
       coordText.textContent = 'Coordinator: Online';
     } else if (data.transport_status === 'reconnecting') {
@@ -142,6 +147,8 @@ async function loadStatus() {
       coordPill.className = 'badge badge-disconnected';
       coordText.textContent = 'Coordinator: Offline';
     }
+
+    updateCoordinatorDependentUI(isOnline);
 
     // 2. MQTT Status Pill
     const mqttPill = document.getElementById('mqtt-status-pill');
@@ -216,6 +223,66 @@ async function loadStatus() {
 
   } catch (err) {
     console.error('Failed to load status:', err);
+    isCoordinatorOnline = false;
+    updateCoordinatorDependentUI(false);
+  }
+}
+
+function updateCoordinatorDependentUI(isOnline) {
+  const stateChanged = (lastCoordinatorOnlineState !== isOnline);
+  lastCoordinatorOnlineState = isOnline;
+
+  // 1. Offline warning banner
+  const banner = document.getElementById('coordinator-offline-banner');
+  if (banner) {
+    banner.style.display = isOnline ? 'none' : 'flex';
+  }
+
+  // 2. Permit join (+ Add Device) button
+  const permitBtn = document.getElementById('permit-join-btn');
+  if (permitBtn) {
+    permitBtn.disabled = !isOnline;
+    if (!isOnline) {
+      permitBtn.title = 'Coordinator offline: pairing is disabled';
+    } else {
+      permitBtn.removeAttribute('title');
+    }
+  }
+
+  // 3. Create device link button
+  const createBindingBtn = document.getElementById('btn-create-binding');
+  if (createBindingBtn) {
+    createBindingBtn.disabled = !isOnline;
+    if (!isOnline) {
+      createBindingBtn.title = 'Coordinator offline: creating direct links is disabled';
+    } else {
+      createBindingBtn.removeAttribute('title');
+    }
+  }
+
+  // 4. Bindings table unlink buttons
+  document.querySelectorAll('.btn-unlink').forEach(btn => {
+    btn.disabled = !isOnline;
+    if (!isOnline) {
+      btn.title = 'Coordinator offline: unlinking is disabled';
+    } else {
+      btn.removeAttribute('title');
+    }
+  });
+
+  // 5. Smart suggestions apply buttons
+  document.querySelectorAll('.btn-apply-rec').forEach(btn => {
+    btn.disabled = !isOnline;
+    if (!isOnline) {
+      btn.title = 'Coordinator offline: direct linking is disabled';
+    } else {
+      btn.removeAttribute('title');
+    }
+  });
+
+  // 6. If currently inspecting device exposes, refresh exposes controls disabled state when transition occurs
+  if (stateChanged && currentDetailDevice && currentDetailSubtab === 'exposes') {
+    renderExposesTab(currentDetailDevice, currentDetailDefinition);
   }
 }
 
@@ -239,10 +306,18 @@ function updatePermitJoinDisplay(seconds) {
 }
 
 function openPermitJoinModal() {
+  if (!isCoordinatorOnline) {
+    alert('Coordinator is offline. Cannot pair devices.');
+    return;
+  }
   openModal('modal-permit-join');
 }
 
 async function submitPermitJoin() {
+  if (!isCoordinatorOnline) {
+    alert('Coordinator is offline. Cannot open network pairing.');
+    return;
+  }
   const durationInput = document.getElementById('permit-join-duration');
   const duration = parseInt(durationInput.value, 10) || 60;
 
@@ -252,7 +327,10 @@ async function submitPermitJoin() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ time: duration })
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
     closeModal('modal-permit-join');
     loadStatus();
   } catch (err) {
@@ -261,12 +339,19 @@ async function submitPermitJoin() {
 }
 
 async function stopPermitJoin() {
+  if (!isCoordinatorOnline) {
+    return;
+  }
   try {
-    await fetch('/api/network/permit-join', {
+    const res = await fetch('/api/network/permit-join', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ time: 0 })
     });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
     closeModal('modal-permit-join');
     loadStatus();
   } catch (err) {
@@ -905,7 +990,17 @@ function renderExposesTab(dev, def) {
     return;
   }
 
-  container.innerHTML = exposes.map(exp => renderExposeRow(dev, exp)).join('');
+  let warningHtml = '';
+  if (!isCoordinatorOnline) {
+    warningHtml = `
+      <div class="coordinator-tab-banner" style="margin-bottom:16px; padding:12px 16px; background-color:rgba(210,153,34,0.15); border:1px solid rgba(210,153,34,0.35); border-radius:var(--radius-md); color:var(--accent-orange); font-size:13px; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:18px;">⚠️</span>
+        <span><strong>Coordinator Offline:</strong> Controls are disabled. Physical commands cannot be transmitted over the radio mesh until the coordinator is reconnected.</span>
+      </div>
+    `;
+  }
+
+  container.innerHTML = warningHtml + exposes.map(exp => renderExposeRow(dev, exp)).join('');
 }
 
 function renderExposeRow(dev, exp) {
@@ -941,7 +1036,7 @@ function renderExposeRow(dev, exp) {
         <div class="expose-binary-toggle">
           <span class="toggle-label ${!isChecked ? 'active' : ''}">${escapeHtml(String(offVal))}</span>
           <label class="switch">
-            <input type="checkbox" id="toggle-${escapeHtml(prop)}" ${isChecked ? 'checked' : ''}
+            <input type="checkbox" id="toggle-${escapeHtml(prop)}" ${isChecked ? 'checked' : ''} ${!isCoordinatorOnline ? 'disabled title="Coordinator offline: controls disabled"' : ''}
               onchange="onBinaryToggleChange('${escapeHtml(dev.ieee)}', '${escapeHtml(prop)}', this.checked, '${escapeHtml(String(offVal))}', '${escapeHtml(String(onVal))}')">
             <span class="toggle-slider"></span>
           </label>
@@ -956,7 +1051,7 @@ function renderExposeRow(dev, exp) {
       const currentStr = val !== undefined && val !== null ? String(val).toLowerCase() : '';
       const chips = values.map(v => {
         const isAct = currentStr === String(v).toLowerCase();
-        return `<button type="button" class="chip-btn ${isAct ? 'active' : ''}" onclick="onEnumChipClick('${escapeHtml(dev.ieee)}', '${escapeHtml(prop)}', '${escapeHtml(v)}')">${escapeHtml(v)}</button>`;
+        return `<button type="button" class="chip-btn ${isAct ? 'active' : ''}" ${!isCoordinatorOnline ? 'disabled title="Coordinator offline: controls disabled"' : ''} onclick="onEnumChipClick('${escapeHtml(dev.ieee)}', '${escapeHtml(prop)}', '${escapeHtml(v)}')">${escapeHtml(v)}</button>`;
       }).join('');
       controlHtml = `<div class="expose-chip-group">${chips}</div>`;
       break;
@@ -973,7 +1068,7 @@ function renderExposeRow(dev, exp) {
         controlHtml = `
           <div class="expose-numeric-slider">
             <div class="slider-track-wrap">
-              <input type="range" class="range-input" id="slider-${escapeHtml(prop)}" min="${min}" max="${max}" value="${numVal}"
+              <input type="range" class="range-input" id="slider-${escapeHtml(prop)}" min="${min}" max="${max}" value="${numVal}" ${!isCoordinatorOnline ? 'disabled title="Coordinator offline: controls disabled"' : ''}
                 oninput="onSliderTrackInput('${escapeHtml(prop)}', this.value)"
                 onchange="setDeviceProperty('${escapeHtml(dev.ieee)}', '${escapeHtml(prop)}', Number(this.value))">
               <div class="range-bounds">
@@ -982,7 +1077,7 @@ function renderExposeRow(dev, exp) {
               </div>
             </div>
             <div class="unit-input-box">
-              <input type="number" id="input-${escapeHtml(prop)}" min="${min}" max="${max}" value="${numVal}"
+              <input type="number" id="input-${escapeHtml(prop)}" min="${min}" max="${max}" value="${numVal}" ${!isCoordinatorOnline ? 'disabled title="Coordinator offline: controls disabled"' : ''}
                 oninput="onSliderBoxInput('${escapeHtml(prop)}', this.value)"
                 onchange="setDeviceProperty('${escapeHtml(dev.ieee)}', '${escapeHtml(prop)}', Number(this.value))">
               <span class="unit-label">${escapeHtml(unit)}</span>
@@ -1003,7 +1098,7 @@ function renderExposeRow(dev, exp) {
 
     case 'action': {
       controlHtml = `
-        <button type="button" class="expose-action-btn" id="btn-action-${escapeHtml(prop)}"
+        <button type="button" class="expose-action-btn" id="btn-action-${escapeHtml(prop)}" ${!isCoordinatorOnline ? 'disabled title="Coordinator offline: actions disabled"' : ''}
           onclick="triggerDeviceAction('${escapeHtml(dev.ieee)}', '${escapeHtml(prop)}')">
           ${escapeHtml(prop)}
         </button>
@@ -1077,6 +1172,11 @@ function onSliderBoxInput(prop, val) {
 }
 
 async function setDeviceProperty(ieee, prop, val) {
+  if (!isCoordinatorOnline) {
+    alert('Coordinator is offline. Cannot send control commands to device.');
+    return;
+  }
+
   if (currentDetailDevice && currentDetailDevice.ieee === ieee) {
     if (!currentDetailDevice.state) currentDetailDevice.state = {};
     currentDetailDevice.state[prop] = val;
@@ -1101,6 +1201,11 @@ async function setDeviceProperty(ieee, prop, val) {
 }
 
 async function triggerDeviceAction(ieee, action) {
+  if (!isCoordinatorOnline) {
+    alert('Coordinator is offline. Cannot trigger device actions.');
+    return;
+  }
+
   const btn = document.getElementById(`btn-action-${action}`);
   const originalText = btn ? btn.textContent : '';
   if (btn) {
@@ -1270,7 +1375,7 @@ function renderBindingsTable(bindings) {
         </td>
         <td class="col-advanced mono">${b.dst_endpoint}</td>
         <td>
-          <button class="btn btn-danger btn-sm" onclick="removeBinding('${escapeHtml(b.src_ieee)}', ${b.src_endpoint}, '${escapeHtml(b.dst_ieee)}', ${b.dst_endpoint}, ${b.cluster_id})">
+          <button class="btn btn-danger btn-sm btn-unlink" ${!isCoordinatorOnline ? 'disabled title="Coordinator offline: unlinking is disabled"' : ''} onclick="removeBinding('${escapeHtml(b.src_ieee)}', ${b.src_endpoint}, '${escapeHtml(b.dst_ieee)}', ${b.dst_endpoint}, ${b.cluster_id})">
             Unlink
           </button>
         </td>
@@ -1285,6 +1390,10 @@ function getDeviceName(ieee) {
 }
 
 function openCreateBindingModal() {
+  if (!isCoordinatorOnline) {
+    alert('Coordinator is offline. Cannot create direct links.');
+    return;
+  }
   populateDeviceSelect('bind-src-device');
   populateDeviceSelect('bind-target-device');
   updateBindingEndpoints('src');
@@ -1322,6 +1431,11 @@ function updateBindingEndpoints(role) {
 }
 
 async function submitCreateBinding() {
+  if (!isCoordinatorOnline) {
+    alert('Coordinator is offline. Cannot create direct links.');
+    return;
+  }
+
   const srcIEEE = document.getElementById('bind-src-device').value;
   const srcEp = parseInt(document.getElementById('bind-src-ep').value, 10) || 1;
   const targetIEEE = document.getElementById('bind-target-device').value;
@@ -1361,6 +1475,11 @@ async function submitCreateBinding() {
 }
 
 async function removeBinding(srcIEEE, srcEp, dstIEEE, dstEp, clusterID) {
+  if (!isCoordinatorOnline) {
+    alert('Coordinator is offline. Cannot remove direct links.');
+    return;
+  }
+
   if (!confirm(`Are you sure you want to remove the direct link between ${getDeviceName(srcIEEE)} and ${getDeviceName(dstIEEE)}?`)) {
     return;
   }
@@ -1377,7 +1496,10 @@ async function removeBinding(srcIEEE, srcEp, dstIEEE, dstEp, clusterID) {
         cluster_id: clusterID
       })
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
     loadBindings();
   } catch (err) {
     alert(`Failed to remove link: ${err.message}`);
@@ -1444,7 +1566,7 @@ function renderRecommendations(recs) {
         <div>
           ${isApplied ? 
             `<span class="badge badge-connected">Applied</span>` : 
-            `<button class="btn btn-success btn-sm" onclick="applyRecommendation('${escapeHtml(rec.id)}')">Enable Direct Link</button>`
+            `<button class="btn btn-success btn-sm btn-apply-rec" ${!isCoordinatorOnline ? 'disabled title="Coordinator offline: direct linking is disabled"' : ''} onclick="applyRecommendation('${escapeHtml(rec.id)}')">Enable Direct Link</button>`
           }
         </div>
       </div>
@@ -1453,12 +1575,17 @@ function renderRecommendations(recs) {
 }
 
 async function applyRecommendation(recId) {
+  if (!isCoordinatorOnline) {
+    alert('Coordinator is offline. Cannot apply direct link suggestions.');
+    return;
+  }
+
   try {
     const res = await fetch(`/api/ai/recommendations/${encodeURIComponent(recId)}/apply`, {
       method: 'POST'
     });
     if (!res.ok) {
-      const err = await res.json();
+      const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `HTTP ${res.status}`);
     }
     alert('Direct link enabled successfully!');

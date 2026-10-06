@@ -215,7 +215,11 @@ func (s *Server) handlePermitJoin(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.controller.PermitJoin(r.Context(), duration); err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
+		if errors.Is(err, controller.ErrCoordinatorNotConnected) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
@@ -314,7 +318,11 @@ func (s *Server) handleDeviceSetState(w http.ResponseWriter, r *http.Request) {
 	updatedDev, err := s.controller.SetDeviceState(r.Context(), ieee, updates)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
+		if errors.Is(err, controller.ErrCoordinatorNotConnected) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
@@ -348,7 +356,11 @@ func (s *Server) handleDeviceAction(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.controller.TriggerDeviceAction(r.Context(), ieee, body.Action); err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
+		if errors.Is(err, controller.ErrCoordinatorNotConnected) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
@@ -384,7 +396,11 @@ func (s *Server) handleCreateBinding(w http.ResponseWriter, r *http.Request) {
 	b, warnings, err := s.controller.CreateDirectBinding(r.Context(), req)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
+		if errors.Is(err, controller.ErrCoordinatorNotConnected) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
@@ -418,7 +434,11 @@ func (s *Server) handleDeleteBinding(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.controller.RemoveDirectBinding(r.Context(), req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
+		if errors.Is(err, controller.ErrCoordinatorNotConnected) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
@@ -453,7 +473,9 @@ func (s *Server) handleApplyRecommendation(w http.ResponseWriter, r *http.Reques
 
 	if err := s.controller.ApplyRecommendation(r.Context(), recID); err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		if errors.Is(err, controller.ErrAIDisabled) {
+		if errors.Is(err, controller.ErrCoordinatorNotConnected) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else if errors.Is(err, controller.ErrAIDisabled) {
 			w.WriteHeader(http.StatusForbidden)
 		} else {
 			w.WriteHeader(http.StatusBadRequest)

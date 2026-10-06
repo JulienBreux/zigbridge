@@ -1154,3 +1154,106 @@ func TestControllerSetDeviceStateAndAction(t *testing.T) {
 	}
 }
 
+func TestControllerDisconnectedCoordinator(t *testing.T) {
+	cfg := config.Default()
+	cfg.Storage.DevicesPath = filepath.Join(t.TempDir(), "devices.yaml")
+	cfg.AI.Enabled = true
+
+	mockTrans, _ := transport.NewMockTransport()
+	mockAdp := mock.New(20, 0x1A62)
+	mockMQTT := mqtt.NewMockClient()
+
+	ctrl := controller.New(cfg, mockTrans, mockAdp, mockMQTT)
+	t.Cleanup(func() {
+		_ = ctrl.Stop()
+	})
+	ctx := t.Context()
+
+	// Initial unstarted state: transport is not open
+	if ctrl.IsCoordinatorConnected() {
+		t.Fatal("expected coordinator to NOT be connected before Start")
+	}
+
+	const ieee = "0x00124B0011223344"
+	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{
+		IEEE: ieee,
+		NWK:  0x1122,
+	})
+
+	// 1. PermitJoin must fail
+	if err := ctrl.PermitJoin(ctx, 60); !errors.Is(err, controller.ErrCoordinatorNotConnected) {
+		t.Errorf("expected ErrCoordinatorNotConnected on PermitJoin, got: %v", err)
+	}
+
+	// 2. CreateDirectBinding must fail
+	bindReq := adapter.BindRequest{
+		SrcIEEE:     ieee,
+		SrcEndpoint: 1,
+		ClusterID:   0x0006,
+		DstIEEE:     "0x00124B0099887766",
+		DstEndpoint: 1,
+	}
+	if _, _, err := ctrl.CreateDirectBinding(ctx, bindReq); !errors.Is(err, controller.ErrCoordinatorNotConnected) {
+		t.Errorf("expected ErrCoordinatorNotConnected on CreateDirectBinding, got: %v", err)
+	}
+
+	// 3. RemoveDirectBinding must fail
+	if err := ctrl.RemoveDirectBinding(ctx, bindReq); !errors.Is(err, controller.ErrCoordinatorNotConnected) {
+		t.Errorf("expected ErrCoordinatorNotConnected on RemoveDirectBinding, got: %v", err)
+	}
+
+	// 4. ApplyRecommendation must fail
+	if err := ctrl.ApplyRecommendation(ctx, "rec-test-1"); !errors.Is(err, controller.ErrCoordinatorNotConnected) {
+		t.Errorf("expected ErrCoordinatorNotConnected on ApplyRecommendation, got: %v", err)
+	}
+
+	// 5. SetDeviceState must fail
+	if _, err := ctrl.SetDeviceState(ctx, ieee, map[string]any{"state": "ON"}); !errors.Is(err, controller.ErrCoordinatorNotConnected) {
+		t.Errorf("expected ErrCoordinatorNotConnected on SetDeviceState, got: %v", err)
+	}
+
+	// 6. TriggerDeviceAction must fail
+	if err := ctrl.TriggerDeviceAction(ctx, ieee, "identify"); !errors.Is(err, controller.ErrCoordinatorNotConnected) {
+		t.Errorf("expected ErrCoordinatorNotConnected on TriggerDeviceAction, got: %v", err)
+	}
+
+	// Verify local offline operations still succeed
+	if devices := ctrl.GetDevices(); len(devices) != 1 {
+		t.Errorf("expected 1 device in offline inventory, got %d", len(devices))
+	}
+	if ok := ctrl.SetDeviceFriendlyName(ieee, "Offline Renamed Device"); !ok {
+		t.Error("expected SetDeviceFriendlyName to succeed when offline")
+	}
+	dev, found := ctrl.GetDevice(ieee)
+	if !found || dev.FriendlyName != "Offline Renamed Device" {
+		t.Errorf("expected updated friendly name, got %v", dev)
+	}
+
+	// Start controller -> coordinator should now be connected
+	if err := ctrl.Start(ctx); err != nil {
+		t.Fatalf("failed to start controller: %v", err)
+	}
+	if !ctrl.IsCoordinatorConnected() {
+		t.Fatal("expected coordinator to be connected after Start")
+	}
+
+	// PermitJoin should now succeed
+	if err := ctrl.PermitJoin(ctx, 10); err != nil {
+		t.Errorf("expected PermitJoin to succeed when connected, got: %v", err)
+	}
+
+	// Now close transport to simulate runtime coordinator disconnection
+	_ = mockTrans.Close()
+	if ctrl.IsCoordinatorConnected() {
+		t.Fatal("expected coordinator to NOT be connected after transport Close")
+	}
+
+	// Guarded operations must fail again
+	if err := ctrl.PermitJoin(ctx, 10); !errors.Is(err, controller.ErrCoordinatorNotConnected) {
+		t.Errorf("expected ErrCoordinatorNotConnected after disconnect, got: %v", err)
+	}
+	if _, err := ctrl.SetDeviceState(ctx, ieee, map[string]any{"state": "OFF"}); !errors.Is(err, controller.ErrCoordinatorNotConnected) {
+		t.Errorf("expected ErrCoordinatorNotConnected after disconnect on SetDeviceState, got: %v", err)
+	}
+}
+

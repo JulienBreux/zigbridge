@@ -121,6 +121,15 @@
     </button>
   </nav>
 
+  <!-- COORDINATOR OFFLINE BANNER -->
+  <div id="coordinator-offline-banner" class="coordinator-warning-banner" style="display:none;" role="alert">
+    <div class="warning-banner-icon">⚠️</div>
+    <div class="warning-banner-content">
+      <strong>Coordinator Disconnected</strong>
+      <span>Radio coprocessor is offline. Pairing devices, managing direct bindings, and device controls are disabled until the connection is restored.</span>
+    </div>
+  </div>
+
   <main class="content">
     <!-- DEVICES TAB (DEFAULT ACTIVE TAB) -->
     <section id="tab-devices" class="tab-pane active">
@@ -319,7 +328,7 @@
             Direct bindings allow switches and remotes to control smart lights directly with instantaneous response—even if the coordinator, server, or Wi-Fi is powered off.
           </p>
         </div>
-        <button class="btn btn-primary" onclick="openCreateBindingModal()">+ Create Device Link</button>
+        <button id="btn-create-binding" class="btn btn-primary" onclick="openCreateBindingModal()">+ Create Device Link</button>
       </div>
 
       <div class="table-container">

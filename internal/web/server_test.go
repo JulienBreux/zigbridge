@@ -604,3 +604,149 @@ func TestWebAPIDeviceSetStateAndAction(t *testing.T) {
 	}
 }
 
+func setupDisconnectedTestServer(t *testing.T) (*web.Server, *controller.Controller, *transport.MockTransport, string) {
+	cfg := config.Default()
+	cfg.Storage.DevicesPath = filepath.Join(t.TempDir(), "devices.yaml")
+	cfg.Web.ListenAddr = "127.0.0.1:0"
+	cfg.AI.Enabled = true
+
+	mockTrans, _ := transport.NewMockTransport()
+	mockAdp := mock.New(15, 0x1A62)
+	mockMQ := mqtt.NewMockClient()
+
+	ctrl := controller.New(cfg, mockTrans, mockAdp, mockMQ)
+	ctx := t.Context()
+	if err := ctrl.Start(ctx); err != nil {
+		t.Fatalf("failed to start controller: %v", err)
+	}
+
+	srv := web.NewServer(&cfg.Web, ctrl)
+	if err := srv.Start(ctx); err != nil {
+		t.Fatalf("failed to start web server: %v", err)
+	}
+
+	addr := srv.Addr().String()
+	baseURL := "http://" + addr
+
+	t.Cleanup(func() {
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 2*time.Second)
+		defer cancel()
+		_ = srv.Stop(stopCtx)
+		_ = ctrl.Stop()
+	})
+
+	return srv, ctrl, mockTrans, baseURL
+}
+
+func TestWebAPICoordinatorDisconnected(t *testing.T) {
+	_, ctrl, mockTrans, baseURL := setupDisconnectedTestServer(t)
+
+	const ieee = "0x00158D0001AABBCC"
+	ctrl.HandleDeviceJoin(adapter.DeviceJoinInfo{
+		IEEE: ieee,
+		NWK:  0x5678,
+	})
+
+	// Close transport to disconnect coordinator
+	_ = mockTrans.Close()
+
+	client := &http.Client{Timeout: 3 * time.Second}
+
+	// 1. POST /api/network/permit-join -> 503
+	resp, err := client.Post(baseURL+"/api/network/permit-join", "application/json", strings.NewReader(`{"duration":60}`))
+	if err != nil {
+		t.Fatalf("permit-join request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 for permit-join, got %d", resp.StatusCode)
+	}
+	var errResp map[string]string
+	_ = json.NewDecoder(resp.Body).Decode(&errResp)
+	if !strings.Contains(errResp["error"], "coordinator is not connected") {
+		t.Errorf("expected 'coordinator is not connected' error, got %v", errResp)
+	}
+
+	// 2. POST /api/bindings -> 503
+	bindPayload := `{"source_ieee":"` + ieee + `","source_ep":1,"cluster_id":6,"target_ieee":"0x00124B0099887766","target_ep":1}`
+	resp, err = client.Post(baseURL+"/api/bindings", "application/json", strings.NewReader(bindPayload))
+	if err != nil {
+		t.Fatalf("bindings post request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 for create binding, got %d", resp.StatusCode)
+	}
+
+	// 3. DELETE /api/bindings -> 503
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodDelete, baseURL+"/api/bindings", strings.NewReader(bindPayload))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Fatalf("delete binding request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 for delete binding, got %d", resp.StatusCode)
+	}
+
+	// 4. POST /api/devices/{ieee}/set -> 503
+	resp, err = client.Post(baseURL+"/api/devices/"+ieee+"/set", "application/json", strings.NewReader(`{"state":"ON"}`))
+	if err != nil {
+		t.Fatalf("device set request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 for device set, got %d", resp.StatusCode)
+	}
+
+	// 5. POST /api/devices/{ieee}/action -> 503
+	resp, err = client.Post(baseURL+"/api/devices/"+ieee+"/action", "application/json", strings.NewReader(`{"action":"identify"}`))
+	if err != nil {
+		t.Fatalf("device action request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 for device action, got %d", resp.StatusCode)
+	}
+
+	// 6. POST /api/ai/recommendations/{id}/apply -> 503
+	resp, err = client.Post(baseURL+"/api/ai/recommendations/rec-123/apply", "application/json", nil)
+	if err != nil {
+		t.Fatalf("apply recommendation request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 for apply recommendation, got %d", resp.StatusCode)
+	}
+
+	// 7. Offline operations should remain 200 OK
+	resp, err = client.Get(baseURL + "/api/devices")
+	if err != nil {
+		t.Fatalf("get devices request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 for get devices, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Post(baseURL+"/api/devices/"+ieee+"/rename", "application/json", strings.NewReader(`{"friendly_name":"Offline Device"}`))
+	if err != nil {
+		t.Fatalf("rename device request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 for rename device, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Get(baseURL + "/api/bindings")
+	if err != nil {
+		t.Fatalf("get bindings request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 for get bindings, got %d", resp.StatusCode)
+	}
+}
+
+

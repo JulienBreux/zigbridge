@@ -35,6 +35,9 @@ type VirtualDeviceManager interface {
 // ErrAIDisabled indicates the AI recommendation engine is disabled in configuration.
 var ErrAIDisabled = errors.New("ai recommendation engine is disabled in configuration")
 
+// ErrCoordinatorNotConnected indicates the radio coordinator is disconnected or offline.
+var ErrCoordinatorNotConnected = errors.New("coordinator is not connected")
+
 // BridgeStatus reports high-level metrics and coordinator state.
 type BridgeStatus struct {
 	Connected           bool                `json:"connected"`
@@ -205,8 +208,26 @@ func (c *Controller) Stop() error {
 	return nil
 }
 
+// IsCoordinatorConnected reports whether the transport is active and the radio adapter is operational.
+func (c *Controller) IsCoordinatorConnected() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.transport == nil || !c.transport.IsConnected() {
+		return false
+	}
+	if c.adapter == nil {
+		return false
+	}
+	status := c.adapter.Info().Status
+	return status == "ready" || status == "running"
+}
+
 // PermitJoin opens network joining for the given duration (in seconds, max 254).
 func (c *Controller) PermitJoin(ctx context.Context, duration uint8) error {
+	if !c.IsCoordinatorConnected() {
+		return ErrCoordinatorNotConnected
+	}
+
 	c.mu.Lock()
 	if c.permitJoinCancel != nil {
 		c.permitJoinCancel()
@@ -670,6 +691,10 @@ func (c *Controller) interviewDevice(ieee string, nwk uint16) {
 // CreateDirectBinding executes a direct Zigbee binding with optimistic support.
 // Returns the binding, any warnings (e.g. if the target was not fully discovered), and an error if failed.
 func (c *Controller) CreateDirectBinding(ctx context.Context, req adapter.BindRequest) (*binding.Binding, []string, error) {
+	if !c.IsCoordinatorConnected() {
+		return nil, nil, ErrCoordinatorNotConnected
+	}
+
 	var warnings []string
 
 	// Check if source device is known
@@ -692,6 +717,9 @@ func (c *Controller) CreateDirectBinding(ctx context.Context, req adapter.BindRe
 
 // RemoveDirectBinding deletes an active direct binding.
 func (c *Controller) RemoveDirectBinding(ctx context.Context, req adapter.BindRequest) error {
+	if !c.IsCoordinatorConnected() {
+		return ErrCoordinatorNotConnected
+	}
 	return c.bindings.RemoveBinding(ctx, req)
 }
 
@@ -745,6 +773,9 @@ func (c *Controller) GetRecommendations(ctx context.Context) ([]ai.Recommendatio
 func (c *Controller) ApplyRecommendation(ctx context.Context, recID string) error {
 	if !c.cfg.AI.Enabled {
 		return ErrAIDisabled
+	}
+	if !c.IsCoordinatorConnected() {
+		return ErrCoordinatorNotConnected
 	}
 
 	c.mu.Lock()
@@ -801,10 +832,22 @@ func (c *Controller) Status() BridgeStatus {
 		mqConnected = c.mqtt.IsConnected()
 	}
 
+	connected := false
+	transStatus := "disconnected"
+	if c.transport != nil {
+		connected = c.transport.IsConnected()
+		transStatus = string(c.transport.Status())
+	}
+
+	var coordInfo adapter.AdapterInfo
+	if c.adapter != nil {
+		coordInfo = c.adapter.Info()
+	}
+
 	return BridgeStatus{
-		Connected:           c.transport.IsConnected(),
-		TransportStatus:     string(c.transport.Status()),
-		Coordinator:         c.adapter.Info(),
+		Connected:           connected,
+		TransportStatus:     transStatus,
+		Coordinator:         coordInfo,
 		DeviceCount:         len(c.devices.GetAll()),
 		BindingCount:        len(c.bindings.ListBindings()),
 		PermitJoinRemaining: uint8(c.permitJoinRemaining.Load()),
@@ -859,6 +902,10 @@ func (c *Controller) UpdateDeviceModel(ieee, manufacturer, model string) bool {
 
 // SetDeviceState updates the state of a device, dispatches commands if applicable, and broadcasts updates.
 func (c *Controller) SetDeviceState(ctx context.Context, ieee string, updates map[string]any) (*Device, error) {
+	if !c.IsCoordinatorConnected() {
+		return nil, ErrCoordinatorNotConnected
+	}
+
 	dev, ok := c.devices.Get(ieee)
 	if !ok {
 		return nil, fmt.Errorf("device %s not found", ieee)
@@ -908,6 +955,10 @@ func (c *Controller) SetDeviceState(ctx context.Context, ieee string, updates ma
 
 // TriggerDeviceAction triggers an action command on a device (e.g. "identify" or virtual device button).
 func (c *Controller) TriggerDeviceAction(ctx context.Context, ieee string, action string) error {
+	if !c.IsCoordinatorConnected() {
+		return ErrCoordinatorNotConnected
+	}
+
 	dev, ok := c.devices.Get(ieee)
 	if !ok {
 		return fmt.Errorf("device %s not found", ieee)
