@@ -138,6 +138,18 @@ make cross-compile
 
 ---
 
+## Community & Contributing
+
+We welcome contributions from everyone! Please check out our project guidelines:
+
+- 🤝 [**Contributing Guide**](CONTRIBUTING.md) - How to report issues, contribute fixtures, and submit pull requests.
+- 📜 [**Code of Conduct**](CODE_OF_CONDUCT.md) - Our standards for community engagement.
+- 🔒 [**Security Policy**](SECURITY.md) - Responsible vulnerability reporting and best practices.
+- 👥 [**Maintainers**](MAINTAINERS.md) - Project maintainers and governance.
+
+---
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
