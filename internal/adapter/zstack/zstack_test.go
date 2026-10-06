@@ -93,7 +93,7 @@ func TestZStackPermitJoinFraming(t *testing.T) {
 
 	// 1. UTIL_PERMIT_JOIN_REQ: SubsystemUTIL (0x07), Cmd 0x0B, duration 60
 	utilFrame := frames[0]
-	if (utilFrame.cmd0 & 0x1F) != SubsystemUTIL || utilFrame.cmd1 != 0x0B {
+	if (utilFrame.cmd0&0x1F) != SubsystemUTIL || utilFrame.cmd1 != 0x0B {
 		t.Errorf("expected UTIL_PERMIT_JOIN_REQ, got cmd0=0x%02X cmd1=0x%02X", utilFrame.cmd0, utilFrame.cmd1)
 	}
 	if len(utilFrame.data) != 1 || utilFrame.data[0] != 60 {
@@ -102,7 +102,7 @@ func TestZStackPermitJoinFraming(t *testing.T) {
 
 	// 2. ZDO_MGMT_PERMIT_JOIN_REQ broadcast: SubsystemZDO (0x05), Cmd 0x36, AddrMode 0x0F, DstAddr 0xFFFC, TCSig 0x01
 	bcastFrame := frames[1]
-	if (bcastFrame.cmd0 & 0x1F) != SubsystemZDO || bcastFrame.cmd1 != 0x36 {
+	if (bcastFrame.cmd0&0x1F) != SubsystemZDO || bcastFrame.cmd1 != 0x36 {
 		t.Errorf("expected ZDO_MGMT_PERMIT_JOIN_REQ broadcast, got cmd0=0x%02X cmd1=0x%02X", bcastFrame.cmd0, bcastFrame.cmd1)
 	}
 	if len(bcastFrame.data) < 5 {
@@ -140,7 +140,7 @@ func TestZStackPermitJoinFraming(t *testing.T) {
 
 	// 4. ZB_PERMIT_JOINING_REQUEST: SubsystemSAPI (0x06), Cmd 0x08, Data [0xFC, 0xFF, 60]
 	sapiFrame := frames[3]
-	if (sapiFrame.cmd0 & 0x1F) != SubsystemSAPI || sapiFrame.cmd1 != 0x08 {
+	if (sapiFrame.cmd0&0x1F) != SubsystemSAPI || sapiFrame.cmd1 != 0x08 {
 		t.Errorf("expected ZB_PERMIT_JOINING_REQUEST, got cmd0=0x%02X cmd1=0x%02X", sapiFrame.cmd0, sapiFrame.cmd1)
 	}
 	if len(sapiFrame.data) != 3 || sapiFrame.data[2] != 60 {
@@ -228,7 +228,7 @@ func TestZStackDeviceJoinIndicationAndSendZCL(t *testing.T) {
 	}
 
 	lastFrame := frames[len(frames)-1]
-	if (lastFrame.cmd0 & 0x1F) != SubsystemAF || lastFrame.cmd1 != 0x01 {
+	if (lastFrame.cmd0&0x1F) != SubsystemAF || lastFrame.cmd1 != 0x01 {
 		t.Errorf("expected AF_DATA_REQUEST (0x2401), got cmd0=0x%02X cmd1=0x%02X", lastFrame.cmd0, lastFrame.cmd1)
 	}
 	targetNWK := binary.LittleEndian.Uint16(lastFrame.data[0:2])

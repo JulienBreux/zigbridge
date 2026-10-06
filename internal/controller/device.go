@@ -261,4 +261,3 @@ func (r *DeviceRegistry) UpdateModelInfo(key, manufacturer, model string) bool {
 	}
 	return true
 }
-

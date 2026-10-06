@@ -115,4 +115,3 @@ func TestHADiscoveryGeneration(t *testing.T) {
 		t.Errorf("unexpected mains voltage config: %+v", mainsVoltConfig)
 	}
 }
-

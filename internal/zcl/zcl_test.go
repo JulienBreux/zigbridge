@@ -114,4 +114,3 @@ func TestParseReadAttributesResponse(t *testing.T) {
 		t.Errorf("record 1 mismatch: %+v", records[1])
 	}
 }
-

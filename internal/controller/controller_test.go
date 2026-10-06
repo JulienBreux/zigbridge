@@ -680,14 +680,14 @@ func TestDeviceRegistryDualLookupAndInterview(t *testing.T) {
 			Direction:              zcl.DirectionServerToClient,
 			DisableDefaultResponse: true,
 		},
-		ClusterID:              zcl.ClusterBasic,
-		CommandID:              zcl.CmdReadAttributesResponse,
-		SourceAddress:          "0xA701",
-		DestAddress:            "0x0000",
-		SourceEndpoint:         1,
-		DestEndpoint:           1,
-		Payload:                readPayload,
-		LQI:                    255,
+		ClusterID:      zcl.ClusterBasic,
+		CommandID:      zcl.CmdReadAttributesResponse,
+		SourceAddress:  "0xA701",
+		DestAddress:    "0x0000",
+		SourceEndpoint: 1,
+		DestEndpoint:   1,
+		Payload:        readPayload,
+		LQI:            255,
 	})
 
 	joinedDev, ok := ctrl.GetDevice("0x00124B000A7Z0001")
@@ -701,6 +701,3 @@ func TestDeviceRegistryDualLookupAndInterview(t *testing.T) {
 		t.Errorf("expected model A7Z, got %s", joinedDev.Model)
 	}
 }
-
-
-

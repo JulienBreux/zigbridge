@@ -12,9 +12,9 @@ import (
 
 // SerialConfig defines serial connection parameters.
 type SerialConfig struct {
-	Port         string        // e.g. "/dev/ttyUSB0"
-	BaudRate     int           // e.g. 115200
-	DataBits     int           // e.g. 8
+	Port         string // e.g. "/dev/ttyUSB0"
+	BaudRate     int    // e.g. 115200
+	DataBits     int    // e.g. 8
 	StopBits     serial.StopBits
 	Parity       serial.Parity
 	ReadTimeout  time.Duration

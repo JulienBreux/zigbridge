@@ -729,4 +729,3 @@ func (s *Server) handleVirtualDeviceTelemetry(w http.ResponseWriter, r *http.Req
 		"state":   vdev.GetState(),
 	})
 }
-

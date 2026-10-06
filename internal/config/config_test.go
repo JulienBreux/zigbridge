@@ -325,4 +325,3 @@ mqtt:
 		t.Errorf("expected 32 char NetworkKey, got %s", cfg.Adapter.NetworkKey)
 	}
 }
-

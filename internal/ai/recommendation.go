@@ -11,7 +11,7 @@ import (
 type RecommendationType string
 
 const (
-	TypeDirectBinding RecommendationType = "direct_binding"
+	TypeDirectBinding  RecommendationType = "direct_binding"
 	TypeAutomatedScene RecommendationType = "automated_scene"
 )
 
@@ -34,10 +34,10 @@ type SceneAction struct {
 
 // SceneSuggestion describes an automated multi-device routine.
 type SceneSuggestion struct {
-	Name        string        `json:"name"`
-	Trigger     string        `json:"trigger"`
-	Conditions  []string      `json:"conditions"`
-	Actions     []SceneAction `json:"actions"`
+	Name       string        `json:"name"`
+	Trigger    string        `json:"trigger"`
+	Conditions []string      `json:"conditions"`
+	Actions    []SceneAction `json:"actions"`
 }
 
 // Recommendation represents an actionable suggestion derived from network telemetry.

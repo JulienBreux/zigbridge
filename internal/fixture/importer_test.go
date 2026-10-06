@@ -358,4 +358,3 @@ func TestImportA7Z(t *testing.T) {
 		t.Errorf("expected energy telemetry simulation")
 	}
 }
-

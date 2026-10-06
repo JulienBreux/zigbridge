@@ -104,14 +104,14 @@ const (
 
 // Cluster-Specific Commands: LevelControl
 const (
-	CmdLevelMoveToLevel           uint8 = 0x00
-	CmdLevelMove                  uint8 = 0x01
-	CmdLevelStep                  uint8 = 0x02
-	CmdLevelStop                  uint8 = 0x03
-	CmdLevelMoveToLevelWithOnOff  uint8 = 0x04
-	CmdLevelMoveWithOnOff         uint8 = 0x05
-	CmdLevelStepWithOnOff         uint8 = 0x06
-	CmdLevelStopWithOnOff         uint8 = 0x07
+	CmdLevelMoveToLevel          uint8 = 0x00
+	CmdLevelMove                 uint8 = 0x01
+	CmdLevelStep                 uint8 = 0x02
+	CmdLevelStop                 uint8 = 0x03
+	CmdLevelMoveToLevelWithOnOff uint8 = 0x04
+	CmdLevelMoveWithOnOff        uint8 = 0x05
+	CmdLevelStepWithOnOff        uint8 = 0x06
+	CmdLevelStopWithOnOff        uint8 = 0x07
 )
 
 // ZCL Data Types

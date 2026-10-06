@@ -188,10 +188,10 @@ func (z *ZStackAdapter) Start(ctx context.Context) error {
 			0x01,       // Endpoint 1
 			0x04, 0x01, // AppProfileID: 0x0104 (HA)
 			0x05, 0x00, // AppDeviceID: 0x0005 (Coordinator/Gateway)
-			0x00,       // AppDevVer: 0
-			0x00,       // LatencyReq: 0
-			0x00,       // AppNumInClusters: 0
-			0x00,       // AppNumOutClusters: 0
+			0x00, // AppDevVer: 0
+			0x00, // LatencyReq: 0
+			0x00, // AppNumInClusters: 0
+			0x00, // AppNumOutClusters: 0
 		},
 	}
 	_ = z.sendFrame(&epFrame)
@@ -249,8 +249,8 @@ func (z *ZStackAdapter) PermitJoin(ctx context.Context, duration uint8) error {
 	zdoBroadcastData := []byte{
 		0x0F,       // AddrMode: 15 (AddrBroadcast)
 		0xFC, 0xFF, // DstAddr: 0xFFFC
-		duration,   // Duration in seconds
-		0x01,       // TCSignificance: 1 (Trust Center Link Key exchange permitted)
+		duration, // Duration in seconds
+		0x01,     // TCSignificance: 1 (Trust Center Link Key exchange permitted)
 	}
 	zdoBroadcast := MTFrame{
 		Cmd0: TypeSREQ | SubsystemZDO,
@@ -264,8 +264,8 @@ func (z *ZStackAdapter) PermitJoin(ctx context.Context, duration uint8) error {
 	zdoUnicastData := []byte{
 		0x02,       // AddrMode: 16-bit
 		0x00, 0x00, // DstAddr: 0x0000
-		duration,   // Duration in seconds
-		0x01,       // TCSignificance: 1
+		duration, // Duration in seconds
+		0x01,     // TCSignificance: 1
 	}
 	zdoUnicast := MTFrame{
 		Cmd0: TypeSREQ | SubsystemZDO,

@@ -192,4 +192,3 @@ func (m *MockAdapter) GetVirtualDevice(ieee string) (*fixture.VirtualDevice, boo
 	v, ok := m.virtualDevices[ieee]
 	return v, ok
 }
-

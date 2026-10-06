@@ -223,17 +223,17 @@ type NetworkConfig struct {
 
 // MQTTConfig defines MQTT broker settings and Home Assistant discovery.
 type MQTTConfig struct {
-	Enabled            bool          `yaml:"enabled"`
-	Broker             string        `yaml:"broker"` // e.g. "tcp://127.0.0.1:1883"
-	ClientID           string        `yaml:"client_id"`
-	Username           string        `yaml:"username"`
-	Password           string        `yaml:"password"`
-	BaseTopic          string        `yaml:"base_topic"`           // Default: "zigbridge"
-	HADiscovery        bool          `yaml:"ha_discovery"`         // Enable Home Assistant auto-discovery
-	HADiscoveryPrefix  string        `yaml:"ha_discovery_prefix"`  // Default: "homeassistant"
-	Retain             bool          `yaml:"retain"`
-	QoS                byte          `yaml:"qos"`
-	ConnectionTimeout  time.Duration `yaml:"connection_timeout"`
+	Enabled           bool          `yaml:"enabled"`
+	Broker            string        `yaml:"broker"` // e.g. "tcp://127.0.0.1:1883"
+	ClientID          string        `yaml:"client_id"`
+	Username          string        `yaml:"username"`
+	Password          string        `yaml:"password"`
+	BaseTopic         string        `yaml:"base_topic"`          // Default: "zigbridge"
+	HADiscovery       bool          `yaml:"ha_discovery"`        // Enable Home Assistant auto-discovery
+	HADiscoveryPrefix string        `yaml:"ha_discovery_prefix"` // Default: "homeassistant"
+	Retain            bool          `yaml:"retain"`
+	QoS               byte          `yaml:"qos"`
+	ConnectionTimeout time.Duration `yaml:"connection_timeout"`
 }
 
 // WebConfig defines the embedded web dashboard and REST/WebSocket API server.
@@ -255,7 +255,7 @@ type AIConfig struct {
 
 // StorageConfig defines data persistence and runtime state directory settings.
 type StorageConfig struct {
-	DevicesPath string        `yaml:"devices_path"`     // e.g. "data/devices.yaml"
+	DevicesPath string        `yaml:"devices_path"`      // e.g. "data/devices.yaml"
 	Debounce    time.Duration `yaml:"debounce_interval"` // e.g. 2s
 }
 
@@ -287,15 +287,15 @@ func Default() *Config {
 			PermitJoinOnStart:  false,
 		},
 		MQTT: MQTTConfig{
-			Enabled:            true,
-			Broker:             "tcp://localhost:1883",
-			ClientID:           "zigbridge",
-			BaseTopic:          "zigbridge",
-			HADiscovery:        true,
-			HADiscoveryPrefix:  "homeassistant",
-			Retain:             true,
-			QoS:                0,
-			ConnectionTimeout:  10 * time.Second,
+			Enabled:           true,
+			Broker:            "tcp://localhost:1883",
+			ClientID:          "zigbridge",
+			BaseTopic:         "zigbridge",
+			HADiscovery:       true,
+			HADiscoveryPrefix: "homeassistant",
+			Retain:            true,
+			QoS:               0,
+			ConnectionTimeout: 10 * time.Second,
 		},
 		Web: WebConfig{
 			ListenAddr: "0.0.0.0:8080",
@@ -405,14 +405,15 @@ func (c *Config) Validate() error {
 // ResolveConfigPath determines the active configuration file path:
 // 1. If explicit is specified and not standard defaults, return explicit.
 // 2. If explicit is "config.yaml":
-//    - If config.yaml exists -> return "config.yaml"
-//    - If data/config.yaml exists -> return "data/config.yaml"
-//    - Return "config.yaml"
+//   - If config.yaml exists -> return "config.yaml"
+//   - If data/config.yaml exists -> return "data/config.yaml"
+//   - Return "config.yaml"
+//
 // 3. If explicit is "data/config.yaml", return "data/config.yaml".
 // 4. If explicit is empty:
-//    - If data/config.yaml exists -> return "data/config.yaml"
-//    - If config.yaml exists -> return "config.yaml"
-//    - Fall back to "data/config.yaml"
+//   - If data/config.yaml exists -> return "data/config.yaml"
+//   - If config.yaml exists -> return "config.yaml"
+//   - Fall back to "data/config.yaml"
 func ResolveConfigPath(explicit string) string {
 	if explicit != "" && explicit != "config.yaml" && explicit != "data/config.yaml" {
 		return explicit
