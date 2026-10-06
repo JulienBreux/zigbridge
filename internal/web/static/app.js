@@ -76,25 +76,34 @@ function toggleDiagnosticsDrawer() {
 // ==============================================================================
 
 function switchTab(tabId) {
-  const detailView = document.getElementById('view-device-detail');
-  if (detailView) {
-    detailView.style.display = 'none';
-    detailView.classList.remove('active');
-  }
   if (window.location.hash.startsWith('#/devices/')) {
     history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+
+  const detailView = document.getElementById('view-device-detail');
+  if (detailView) {
+    detailView.style.display = '';
+    detailView.classList.remove('active');
   }
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tabId);
   });
   document.querySelectorAll('.tab-pane').forEach(pane => {
+    pane.style.display = '';
     if (pane.id !== 'view-device-detail') {
       pane.classList.toggle('active', pane.id === `tab-${tabId}`);
     }
   });
 
-  if (tabId === 'devices') loadDevices();
+  if (tabId === 'devices') {
+    const searchInput = document.getElementById('device-search');
+    if (searchInput) searchInput.value = '';
+    if (currentDevices && currentDevices.length > 0) {
+      renderDevicesTable(currentDevices);
+    }
+    loadDevices();
+  }
   if (tabId === 'bindings') loadBindings();
   if (tabId === 'simulation') loadSimulationLab();
 }
@@ -484,11 +493,12 @@ function navigateToDevice(ieee) {
 }
 
 function navigateToDevices() {
-  window.location.hash = '';
-  const detailView = document.getElementById('view-device-detail');
-  if (detailView) {
-    detailView.style.display = 'none';
-    detailView.classList.remove('active');
+  if (window.location.hash.startsWith('#/devices/')) {
+    try {
+      history.pushState(null, '', window.location.pathname + window.location.search);
+    } catch (_) {
+      window.location.hash = '';
+    }
   }
   switchTab('devices');
 }
@@ -504,16 +514,14 @@ function handleRoute() {
   }
 
   const detailView = document.getElementById('view-device-detail');
-  if (detailView && detailView.style.display !== 'none') {
-    detailView.style.display = 'none';
+  if (detailView) {
+    detailView.style.display = '';
     detailView.classList.remove('active');
-    const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab || 'devices';
-    const activePane = document.getElementById(`tab-${activeTab}`);
-    if (activePane) {
-      activePane.style.display = 'block';
-      activePane.classList.add('active');
-    }
   }
+
+  const activeBtn = document.querySelector('.tab-btn.active');
+  const targetTab = activeBtn?.dataset.tab || 'devices';
+  switchTab(targetTab);
 }
 
 function switchDetailSubtab(subtab) {
@@ -542,18 +550,16 @@ function renameCurrentDevice() {
 }
 
 async function openDeviceDetail(ieee) {
-  // Hide all main tab panes
-  document.querySelectorAll('.tab-pane').forEach(pane => {
-    pane.classList.remove('active');
-    if (pane.id !== 'view-device-detail') {
-      pane.style.display = 'none';
-    }
-  });
+  // Hide all main tab panes and deactivate navbar tabs
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(pane => {
+    pane.style.display = '';
+    pane.classList.remove('active');
+  });
 
   const detailView = document.getElementById('view-device-detail');
   if (detailView) {
-    detailView.style.display = 'block';
+    detailView.style.display = '';
     detailView.classList.add('active');
   }
 
