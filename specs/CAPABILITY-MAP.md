@@ -12,7 +12,8 @@
 | `controller` | Central orchestrator coordinating adapter, device registry, binding engine, AI recommender, MQTT dispatcher, and event broadcasting | `config`, `transport`, `adapter`, `binding`, `ai`, `mqtt`, `zcl` |
 | `web` | Embedded single-page dashboard (`embed.FS`) and HTTP REST / WebSocket event streaming API | `controller`, `binding`, `ai`, `adapter`, `zcl` |
 | `cli` | Command-line entrypoint (`cmd/zigbridge`), flags, graceful OS signal shutdown (`SIGINT`, `SIGTERM`), and logging setup | `config`, `controller`, `transport`, `adapter`, `web`, `mqtt` |
+| `fixture` | Declarative device definitions (Zigbee2MQTT format), embedded catalog, and virtual device simulator for testing | `zcl`, `adapter` |
 
 ## Build Order
 
-`config`, `transport`, `zcl` → `adapter`, `mqtt`, `ai` → `binding` → `controller` → `web` → `cli`
+`config`, `transport`, `zcl` → `adapter`, `mqtt`, `ai`, `fixture` → `binding` → `controller` → `web` → `cli`
