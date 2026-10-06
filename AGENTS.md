@@ -40,8 +40,13 @@
 3. **Decoupled Interfaces**:
    - Abstract radio coprocessors behind the `adapter.Adapter` interface (TI Z-Stack MT, Silicon Labs EZSP, Mock).
    - Abstract physical transport behind `transport.Transport` (`io.ReadWriteCloser`).
-4. **Offline-First & Zero-CDN Web UI**:
+4. **Offline-First, Zero-CDN & Minimalist Web UI**:
    - The embedded web dashboard must remain 100% functional offline without external CDN dependencies or third-party web fonts.
+   - **Clarity & Brevity**: Prefer concise, single-word labels for tabs and primary views (e.g. `Advance`, `Bindings`, `System`, `Activity`, `Devices`) rather than verbose descriptors (`Advance Mode`, `Autonomous Device-to-Device Bindings`, `Diagnostics`).
+   - **Visual Hygiene & Status Indicators**: Avoid redundant brand icons, subtitles, or non-essential badges (e.g. "Live"). Simplify status displays to clean, minimalist colored status dots with entity labels (`Coordinator`, `MQTT`).
+   - **Contextual Action Placement**: Place primary action controls in the contextual header/actions bar of the view they affect (e.g. `+ Add` directly in the Devices table header actions) rather than detached global toolbars. Avoid redundant browser actions (e.g. manual "Refresh" buttons) and omit empty or redundant table columns (e.g. unused "Actions" columns).
+   - **Full-Page Tools**: Deep inspection, telemetry, and diagnostics belong in dedicated, first-class full-page navigation tabs (`System`) rather than transient slide-out drawers or modal flyouts.
+   - **Standard Footer**: Include project GitHub repository link, current version, and credit mention (`With ❤️ by Julien Breux`).
 5. **Quality Gates & Testing**:
    - **MANDATORY**: Always use `make test` for running tests (runs `go test -v -race ./...`).
    - All code must pass `make test` and `make lint` (zero `go vet` and `golangci-lint` issues).
