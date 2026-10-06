@@ -291,6 +291,28 @@ func (v *VirtualDevice) TriggerAction(actionName string) error
 func (v *VirtualDevice) ReportBattery(percentage uint8, voltageMV uint16) error
 ```
 
+### 4. CLI Fixture Importer (`cmd/zigbridge`)
+
+A CLI command allows users and developers to import or scaffold new fixture files from Zigbee2MQTT device URLs or exported JSON files:
+
+```bash
+# Import/scaffold directly from a Zigbee2MQTT device URL
+./bin/zigbridge fixture import --url https://www.zigbee2mqtt.io/devices/SNZB-01P.html --out fixtures/devices/sonoff_snzb_01p.yaml
+
+# Import from a JSON definition file
+./bin/zigbridge fixture import --json device_def.json --out fixtures/devices/custom_device.yaml
+```
+
+The importer fetches/parses model, vendor, description, endpoints, and exposes into standard Zigbridge fixture YAML.
+
+### 5. Web Dashboard Simulation Controls (`internal/web`)
+
+When running in mock mode (`adapter.type: mock`), the embedded web dashboard automatically reveals a **Simulation Lab** panel:
+- Lists all active virtual devices.
+- Provides interactive trigger buttons for configured actions (e.g. `[ Single Click ]`, `[ Double Click ]`, `[ Long Click ]` for `SNZB-01P`).
+- Provides a battery slider / trigger (`Report Battery: 90%`) to test live telemetry streaming and state persistence in real time.
+- Calls `/api/test/devices/:ieee/action` under the hood.
+
 ---
 
 ## Testing Strategy
@@ -317,6 +339,9 @@ func (v *VirtualDevice) ReportBattery(percentage uint8, voltageMV uint16) error
      - Generates sensor entity for battery (`%`, device_class `battery`).
      - Generates sensor entity for voltage (`mV`, device_class `voltage`).
 
+4. **CLI Importer Testing (`internal/fixture/importer_test.go`)**:
+   - Verify importing from JSON and URL HTML extracts model, vendor, clusters, and exposes correctly.
+
 ---
 
 ## Boundaries
@@ -326,7 +351,6 @@ func (v *VirtualDevice) ReportBattery(percentage uint8, voltageMV uint16) error
   - Embed reference definitions (`embed.FS`) so tests and mock adapters function out of the box with zero setup.
   - Verify all tests pass with `make test` (race detector enabled) and zero linter warnings (`make lint`).
 - **Ask First**:
-  - Adding network-based scraping or automated web downloading of Zigbee2MQTT device pages at runtime.
   - Modifying the core `Device` schema in `internal/controller/device.go`.
 - **Never Do**:
   - Never require Node.js or JavaScript runtime dependencies to interpret `zigbee-herdsman-converters`.
@@ -340,11 +364,14 @@ func (v *VirtualDevice) ReportBattery(percentage uint8, voltageMV uint16) error
 2. **Multi-Device Extensibility**: Any new device from `https://www.zigbee2mqtt.io/devices/` can be added by simply dropping a new YAML definition file into `fixtures/devices/` without compiling or modifying Go source code.
 3. **Programmatic Test Helpers**: Go test suites can instantiate simulated devices (`fixture.Spawn`) and invoke actions (`TriggerAction("single")`, `ReportBattery(...)`) in unit and integration tests.
 4. **End-to-End Event Validation**: In automated tests, triggering an action on the virtual `SNZB-01P` successfully routes through ZCL parsing, Device Registry updates, MQTT publishing, and persistent store debouncing.
-5. **Quality Gates**: `make test` and `make lint` pass with 100% green status.
+5. **CLI Import Utility**: `zigbridge fixture import` allows scaffolding fixture YAMLs from Zigbee2MQTT device pages or JSON definitions.
+6. **Web Dashboard Simulation Panel**: In mock mode, the web UI allows triggering button presses and telemetry updates directly in the browser.
+7. **Quality Gates**: `make test` and `make lint` pass with 100% green status.
 
 ---
 
-## Open Questions
+## Resolved Decisions
 
-1. **CLI Import Helper**: Would you like a utility command (e.g. `zigbridge fixture import --url <zigbee2mqtt-url>` or `--json <file>`) to automatically generate the YAML fixture file, or do you prefer curating fixture YAMLs by hand?
-2. **Web UI Test Controls**: When running Zigbridge in mock mode, should the web dashboard include a "Simulate Device" panel allowing you to click "Single Press", "Double Press", or "Long Press" on the virtual SNZB-01P directly in the browser?
+1. **CLI Import Helper**: Confirmed. Implemented via `zigbridge fixture import` supporting both Zigbee2MQTT URLs and JSON definitions.
+2. **Web UI Test Controls**: Confirmed. Implemented via a Simulation Lab drawer/panel in mock mode calling `/api/test/devices/:ieee/action`.
+
