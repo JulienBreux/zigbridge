@@ -113,4 +113,40 @@ func TestHADiscoveryGeneration(t *testing.T) {
 	if mainsVoltConfig.DeviceClass != "voltage" || mainsVoltConfig.UnitOfMeasurement != "V" {
 		t.Errorf("unexpected mains voltage config: %+v", mainsVoltConfig)
 	}
+
+	// Test Moisture Discovery (water leak)
+	leakConfig := mqtt.NewMoistureDiscovery(dev, "0x00158D0001", "zigbridge")
+	if leakConfig.DeviceClass != "moisture" || leakConfig.Component != "binary_sensor" {
+		t.Errorf("unexpected moisture config: %+v", leakConfig)
+	}
+
+	// Test Contact Discovery
+	contactConfig := mqtt.NewContactDiscovery(dev, "0x00158D0001", "zigbridge")
+	if contactConfig.DeviceClass != "door" || contactConfig.Component != "binary_sensor" {
+		t.Errorf("unexpected contact config: %+v", contactConfig)
+	}
+
+	// Test Tamper Discovery
+	tamperConfig := mqtt.NewTamperDiscovery(dev, "0x00158D0001", "zigbridge")
+	if tamperConfig.DeviceClass != "tamper" || tamperConfig.Component != "binary_sensor" {
+		t.Errorf("unexpected tamper config: %+v", tamperConfig)
+	}
+
+	// Test Battery Low Discovery
+	batLowConfig := mqtt.NewBatteryLowDiscovery(dev, "0x00158D0001", "zigbridge")
+	if batLowConfig.DeviceClass != "battery" || batLowConfig.Component != "binary_sensor" {
+		t.Errorf("unexpected battery low config: %+v", batLowConfig)
+	}
+
+	// Test Smoke Discovery
+	smokeConfig := mqtt.NewSmokeDiscovery(dev, "0x00158D0001", "zigbridge")
+	if smokeConfig.DeviceClass != "smoke" || smokeConfig.Component != "binary_sensor" {
+		t.Errorf("unexpected smoke config: %+v", smokeConfig)
+	}
+
+	// Test Siren Discovery
+	sirenConfig := mqtt.NewSirenDiscovery(dev, "0x00158D0001", "zigbridge")
+	if sirenConfig.Component != "siren" || sirenConfig.UniqueID != "0x00158D0001_warning" {
+		t.Errorf("unexpected siren config: %+v", sirenConfig)
+	}
 }

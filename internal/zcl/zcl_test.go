@@ -24,6 +24,25 @@ func TestBufferPool(t *testing.T) {
 	}
 }
 
+func TestClusterString(t *testing.T) {
+	tests := []struct {
+		cluster ClusterID
+		want    string
+	}{
+		{ClusterBasic, "Basic"},
+		{ClusterIASZone, "IASZone"},
+		{ClusterIASACE, "IASACE"},
+		{ClusterIASWD, "IASWD"},
+		{ClusterID(0x9999), "Cluster(0x9999)"},
+	}
+
+	for _, tt := range tests {
+		if got := tt.cluster.String(); got != tt.want {
+			t.Errorf("ClusterID(%v).String() = %q, want %q", tt.cluster, got, tt.want)
+		}
+	}
+}
+
 func TestZCLFrameEncodeDecode(t *testing.T) {
 	orig := &Frame{
 		Header: FrameControl{

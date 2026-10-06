@@ -28,6 +28,8 @@ const (
 	ClusterRelativeHumidity       ClusterID = 0x0405
 	ClusterOccupancySensing       ClusterID = 0x0406
 	ClusterIASZone                ClusterID = 0x0500
+	ClusterIASACE                 ClusterID = 0x0501
+	ClusterIASWD                  ClusterID = 0x0502
 	ClusterMetering               ClusterID = 0x0702
 	ClusterElectricalMeasurement  ClusterID = 0x0B04
 	ClusterDiagnostic             ClusterID = 0x0B05
@@ -68,6 +70,10 @@ func (c ClusterID) String() string {
 		return "OccupancySensing"
 	case ClusterIASZone:
 		return "IASZone"
+	case ClusterIASACE:
+		return "IASACE"
+	case ClusterIASWD:
+		return "IASWD"
 	case ClusterMetering:
 		return "Metering"
 	case ClusterElectricalMeasurement:
@@ -112,6 +118,28 @@ const (
 	CmdLevelMoveWithOnOff        uint8 = 0x05
 	CmdLevelStepWithOnOff        uint8 = 0x06
 	CmdLevelStopWithOnOff        uint8 = 0x07
+)
+
+// Cluster-Specific Commands: IAS Zone (0x0500)
+const (
+	CmdIASZoneStatusChangeNotification uint8 = 0x00
+	CmdIASZoneEnrollRequest            uint8 = 0x01
+	CmdIASZoneEnrollResponse           uint8 = 0x00
+)
+
+// Cluster-Specific Commands: IAS ACE (0x0501)
+const (
+	CmdIASACEArm       uint8 = 0x00
+	CmdIASACEBypass    uint8 = 0x01
+	CmdIASACEEmergency uint8 = 0x02
+	CmdIASACEFire      uint8 = 0x03
+	CmdIASACEPanic     uint8 = 0x04
+)
+
+// Cluster-Specific Commands: IAS WD (0x0502)
+const (
+	CmdIASWDStartWarning uint8 = 0x00
+	CmdIASWDSquawk       uint8 = 0x01
 )
 
 // ZCL Data Types

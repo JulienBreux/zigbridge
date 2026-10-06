@@ -228,3 +228,98 @@ func NewDeviceTriggerDiscovery(device HADevice, ieee, baseTopic, subtype string)
 		Device:         device,
 	}
 }
+
+// NewMoistureDiscovery builds HA discovery for a water leak sensor.
+func NewMoistureDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "binary_sensor",
+		UniqueID:          ieee + "_water_leak",
+		Name:              device.Name + " Water Leak",
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:     "{{ value_json.water_leak }}",
+		DeviceClass:       "moisture",
+		PayloadOn:         "true",
+		PayloadOff:        "false",
+		Device:            device,
+		AvailabilityTopic: baseTopic + "/bridge/state",
+	}
+}
+
+// NewContactDiscovery builds HA discovery for a door/window contact sensor.
+// In HA: for opening/door device class, ON means open (contact: false) and OFF means closed (contact: true).
+func NewContactDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "binary_sensor",
+		UniqueID:          ieee + "_contact",
+		Name:              device.Name + " Contact",
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:     "{{ value_json.contact }}",
+		DeviceClass:       "door",
+		PayloadOn:         "false",
+		PayloadOff:        "true",
+		Device:            device,
+		AvailabilityTopic: baseTopic + "/bridge/state",
+	}
+}
+
+// NewTamperDiscovery builds HA discovery for a tamper sensor.
+func NewTamperDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "binary_sensor",
+		UniqueID:          ieee + "_tamper",
+		Name:              device.Name + " Tamper",
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:     "{{ value_json.tamper }}",
+		DeviceClass:       "tamper",
+		PayloadOn:         "true",
+		PayloadOff:        "false",
+		Device:            device,
+		AvailabilityTopic: baseTopic + "/bridge/state",
+	}
+}
+
+// NewBatteryLowDiscovery builds HA discovery for a low battery indicator.
+func NewBatteryLowDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "binary_sensor",
+		UniqueID:          ieee + "_battery_low",
+		Name:              device.Name + " Battery Low",
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:     "{{ value_json.battery_low }}",
+		DeviceClass:       "battery",
+		PayloadOn:         "true",
+		PayloadOff:        "false",
+		Device:            device,
+		AvailabilityTopic: baseTopic + "/bridge/state",
+	}
+}
+
+// NewSmokeDiscovery builds HA discovery for a smoke detector.
+func NewSmokeDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "binary_sensor",
+		UniqueID:          ieee + "_smoke",
+		Name:              device.Name + " Smoke",
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		ValueTemplate:     "{{ value_json.smoke }}",
+		DeviceClass:       "smoke",
+		PayloadOn:         "true",
+		PayloadOff:        "false",
+		Device:            device,
+		AvailabilityTopic: baseTopic + "/bridge/state",
+	}
+}
+
+// NewSirenDiscovery builds HA discovery for a warning / siren device.
+func NewSirenDiscovery(device HADevice, ieee, baseTopic string) HAEntityConfig {
+	return HAEntityConfig{
+		Component:         "siren",
+		UniqueID:          ieee + "_warning",
+		Name:              device.Name + " Siren",
+		StateTopic:        fmt.Sprintf("%s/%s", baseTopic, ieee),
+		CommandTopic:      fmt.Sprintf("%s/%s/set", baseTopic, ieee),
+		ValueTemplate:     "{{ value_json.warning }}",
+		Device:            device,
+		AvailabilityTopic: baseTopic + "/bridge/state",
+	}
+}
