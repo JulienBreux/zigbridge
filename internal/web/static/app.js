@@ -442,7 +442,7 @@ function renderDevicesTable(devices) {
   if (!devices || devices.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="11" style="text-align: center; color: var(--text-muted); padding: 32px;">
+        <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 32px;">
           No devices paired yet. Click <strong>+ Add</strong> above to connect smart switches, lights, or sensors.
         </td>
       </tr>`;
@@ -543,13 +543,6 @@ function renderDevicesTable(devices) {
 
         <!-- Advanced: Last Seen -->
         <td class="col-advanced" style="font-size: 11px; color: var(--text-muted);">${lastSeen}</td>
-
-        <!-- Actions -->
-        <td>
-          <button class="btn btn-sm" onclick="event.stopPropagation(); openRenameModal('${escapeHtml(dev.ieee)}', '${escapeHtml(dev.friendly_name || '')}')">
-            Rename
-          </button>
-        </td>
       </tr>
     `;
   }).join('');
