@@ -12,7 +12,7 @@ var (
 // MessageHandler handles incoming messages on subscribed topics.
 type MessageHandler func(topic string, payload []byte)
 
-// Client defines the contract for Zigbridge event dispatching and MQTT interaction.
+// Client defines the contract for ZigBridge event dispatching and MQTT interaction.
 type Client interface {
 	// Connect establishes the MQTT connection and registers LWT.
 	Connect(ctx context.Context) error

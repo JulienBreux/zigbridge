@@ -1,12 +1,12 @@
 # Configuration Reference
 
-Zigbridge is configured via a single YAML file (searched in order: `data/config.yaml`, `config.yaml`, `config.yaml.dist`). A starter template is provided in [`config.yaml.dist`](../config.yaml.dist).
+ZigBridge is configured via a single YAML file (searched in order: `data/config.yaml`, `config.yaml`, `config.yaml.dist`). A starter template is provided in [`config.yaml.dist`](../config.yaml.dist).
 
 ```bash
 # Initialize your local config from the template
 make config   # copies config.yaml.dist to data/config.yaml
 
-# Run Zigbridge
+# Run ZigBridge
 ./bin/zigbridge
 ```
 

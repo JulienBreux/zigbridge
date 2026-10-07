@@ -1,5 +1,5 @@
 # ==============================================================================
-# Zigbridge Makefile
+# ZigBridge Makefile
 # ==============================================================================
 
 SHELL := /bin/bash
@@ -119,7 +119,7 @@ config:
 ## run: Run directly with mock transport & adapter for local testing
 .PHONY: run
 run:
-	@echo "==> Running Zigbridge in development mode..."
+	@echo "==> Running ZigBridge in development mode..."
 	@if [ ! -f data/config.yaml ] && [ ! -f config.yaml ] && [ -f config.yaml.dist ]; then \
 		echo "==> No config found, creating data/config.yaml from template..."; \
 		mkdir -p data; \
@@ -136,7 +136,7 @@ clean:
 ## help: Display available make targets
 .PHONY: help
 help:
-	@echo "Zigbridge Build System"
+	@echo "ZigBridge Build System"
 	@echo ""
 	@echo "Available commands:"
 	@sed -n 's/^##//p' $(MAKEFILE_LIST) | column -t -s ':' | sed -e 's/^/ /'

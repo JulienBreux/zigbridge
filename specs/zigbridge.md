@@ -1,8 +1,8 @@
-# Spec: Zigbridge
+# Spec: ZigBridge
 
 ## Objective
 
-Zigbridge is a modern, ultra-lightweight, high-performance Zigbee-to-MQTT bridge and network controller written in idiomatic Go. It provides:
+ZigBridge is a modern, ultra-lightweight, high-performance Zigbee-to-MQTT bridge and network controller written in idiomatic Go. It provides:
 1. Native support for networked Zigbee coordinators (such as SMLIGHT SLZB-06/SLZB-06M) via TCP/RFC2217 with aggressive keepalive and automated exponential-backoff reconnects, as well as local USB serial sticks (`/dev/ttyUSB0`, Sonoff ZBDongle-P/E, SkyConnect).
 2. Decoupled radio coprocessor drivers for Texas Instruments Z-Stack (CC2652/CC1352/CC2538) and Silicon Labs EmberZNet (EZSP v8+).
 3. A zero-allocation / low-memory packet processing pipeline using `sync.Pool` byte buffers for high-rate Zigbee Cluster Library (ZCL) frame handling.
@@ -49,7 +49,7 @@ go tool cover -func=coverage.out
 # Static analysis and linting
 go vet ./...
 
-# Run Zigbridge with custom configuration
+# Run ZigBridge with custom configuration
 ./bin/zigbridge -config config.yaml
 ```
 

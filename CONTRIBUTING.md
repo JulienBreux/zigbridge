@@ -1,8 +1,8 @@
-# Contributing to Zigbridge
+# Contributing to ZigBridge
 
-Thank you for your interest in contributing to **Zigbridge**! 🎉
+Thank you for your interest in contributing to **ZigBridge**! 🎉
 
-Zigbridge is a next-generation Zigbee-to-MQTT bridge and Direct Binding Orchestrator designed for speed (<15ms latency), low memory (<25 MB RSS), and hardware resilience. We welcome contributions of all kinds: bug fixes, hardware adapter support, device definitions, documentation improvements, and new features.
+ZigBridge is a next-generation Zigbee-to-MQTT bridge and Direct Binding Orchestrator designed for speed (<15ms latency), low memory (<25 MB RSS), and hardware resilience. We welcome contributions of all kinds: bug fixes, hardware adapter support, device definitions, documentation improvements, and new features.
 
 ---
 
@@ -19,12 +19,12 @@ By participating in this project, you agree to abide by our [Code of Conduct](CO
 - Open a new issue with a clear title and description. Include:
   - Coordinator hardware model (e.g., SMLIGHT SLZB-06, Sonoff ZBDongle-P, TubeZB).
   - Coordinator transport mode (`tcp://...` or serial `/dev/ttyUSB0`) and firmware version.
-  - Zigbridge version / commit hash (`./bin/zigbridge -version`).
+  - ZigBridge version / commit hash (`./bin/zigbridge -version`).
   - Exact steps to reproduce the issue.
   - Relevant logs (redact any sensitive Wi-Fi/MQTT credentials or network keys).
 
 ### 2. Adding Device Fixtures & Definitions
-Zigbridge supports simulated device models and Home Assistant expose schemas via YAML fixtures in [`fixtures/devices.yaml`](fixtures/devices.yaml). If you have tested a new Zigbee device, you can contribute its definition to expand our out-of-the-box catalog!
+ZigBridge supports simulated device models and Home Assistant expose schemas via YAML fixtures in [`fixtures/devices.yaml`](fixtures/devices.yaml). If you have tested a new Zigbee device, you can contribute its definition to expand our out-of-the-box catalog!
 
 ### 3. Proposing Features & Specifications
 For significant features or changes to core architectural boundaries, please follow our **spec-driven development** process:
@@ -41,7 +41,7 @@ For significant features or changes to core architectural boundaries, please fol
 - **Make**: Standard build automation tool.
 - **golangci-lint**: Static analysis tool ([Installation Guide](https://golangci-lint.run/usage/install/)).
 - *(Optional)* Zigbee hardware coordinator (SMLIGHT SLZB-06 or USB dongle).
-  - **No hardware? No problem!** Zigbridge includes a fully functional **Mock Adapter & Virtual Device Simulation Lab** allowing complete development and testing without physical radio hardware.
+  - **No hardware? No problem!** ZigBridge includes a fully functional **Mock Adapter & Virtual Device Simulation Lab** allowing complete development and testing without physical radio hardware.
 
 ### Quick Setup Steps
 
@@ -79,7 +79,7 @@ For significant features or changes to core architectural boundaries, please fol
 
 ## Engineering & Architectural Principles
 
-All code submitted to Zigbridge must adhere to these foundational principles:
+All code submitted to ZigBridge must adhere to these foundational principles:
 
 ### 1. Low-Memory & Zero-Allocation
 - Target resident set size (RSS): `< 25 MB`.

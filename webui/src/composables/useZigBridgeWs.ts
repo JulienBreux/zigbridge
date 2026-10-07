@@ -2,7 +2,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 
 export type WsEventHandler = (type: string, payload: any) => void
 
-export function useZigbridgeWs() {
+export function useZigBridgeWs() {
   const isConnected = ref(false)
   let socket: WebSocket | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -22,7 +22,7 @@ export function useZigbridgeWs() {
         isConnected.value = true
         dispatch('system', {
           title: 'System Online',
-          meta: 'Connected to Zigbridge live activity stream.',
+          meta: 'Connected to ZigBridge live activity stream.',
         })
       }
 

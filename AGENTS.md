@@ -1,7 +1,8 @@
-# Agent Guidelines & Project Instructions: Zigbridge
+# Agent Guidelines & Project Instructions: ZigBridge
 
 ## Project Overview
-- **Project Name**: `zigbridge`
+- **Product Name**: `ZigBridge` (capital `Z` and capital `B` — never "Zigbridge")
+- **Repository / Binary / Module Name**: `zigbridge` (`cmd/zigbridge`, `go.mod`)
 - **Language**: Go 1.27+ (`go.mod`)
 - **Distribution Model**: Standalone static binary (`CGO_ENABLED=0`) with embedded web UI (`embed.FS`)
 - **Primary Goal**: High-performance, lightweight Zigbee-to-MQTT bridge and Direct Binding Orchestrator optimized for physical mesh bindings (<15ms latency) and network coordinators (SMLIGHT SLZB-06).

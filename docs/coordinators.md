@@ -1,6 +1,6 @@
 # Coordinator Setup Guide
 
-Zigbridge supports both **network-attached coordinators** (operating over TCP/RFC2217) and **local USB serial dongles**.
+ZigBridge supports both **network-attached coordinators** (operating over TCP/RFC2217) and **local USB serial dongles**.
 
 ---
 
@@ -18,12 +18,12 @@ Zigbridge supports both **network-attached coordinators** (operating over TCP/RF
 
 The **SMLIGHT SLZB-06** is an Ethernet/Wi-Fi connected Zigbee coordinator powered by a TI CC2652P chip. Because it communicates over the local network via TCP socket streaming, you can position the coordinator in the physical center of your home or near a PoE Ethernet switch without needing to place your server nearby.
 
-### Why Zigbridge is Built for SLZB-06
+### Why ZigBridge is Built for SLZB-06
 Traditional Zigbee bridges often treat network coordinators as generic serial ports wrapped with `socat`. When a Wi-Fi drop, DHCP renewal, or switch reboot occurs, connection sockets can hang indefinitely.
 
-Zigbridge provides **native TCP / RFC2217 transport handling**:
+ZigBridge provides **native TCP / RFC2217 transport handling**:
 - **TCP Keepalive Probes**: Active TCP-level keepalive pulses (default `10s`) detect silent connection drops immediately.
-- **Exponential Backoff Reconnect**: When a disconnect occurs, Zigbridge automatically retries with smooth exponential backoff without crashing the application.
+- **Exponential Backoff Reconnect**: When a disconnect occurs, ZigBridge automatically retries with smooth exponential backoff without crashing the application.
 - **RFC2217 Filter**: Strips out Telnet/RFC2217 baud rate negotiation sequences so they do not corrupt Zigbee frames.
 
 ### Configuration (`config.yaml`)
@@ -86,7 +86,7 @@ Zigbee operates in the 2.4 GHz ISM band alongside Wi-Fi 802.11 b/g/n. Choosing t
 |---|---|---|---|
 | **11** | 2405 MHz | Overlaps Wi-Fi Ch 1 | OK if Wi-Fi Ch 1 is unused |
 | **15** | 2425 MHz | In between Wi-Fi Ch 1 & 6 | **Recommended** |
-| **20** | 2450 MHz | In between Wi-Fi Ch 6 & 11 | **Recommended** (Zigbridge Default) |
+| **20** | 2450 MHz | In between Wi-Fi Ch 6 & 11 | **Recommended** (ZigBridge Default) |
 | **25** | 2475 MHz | Above Wi-Fi Ch 11 | **Strongly Recommended** (Minimal Wi-Fi interference) |
 | **26** | 2480 MHz | Edge of band | Caution: Some low-power devices have reduced transmit power on Ch 26 |
 
@@ -104,4 +104,4 @@ adapter:
   type: mock
 ```
 
-In mock mode, Zigbridge boots an in-memory virtual Zigbee radio with simulated devices and responds to all REST and WebSocket requests immediately.
+In mock mode, ZigBridge boots an in-memory virtual Zigbee radio with simulated devices and responds to all REST and WebSocket requests immediately.

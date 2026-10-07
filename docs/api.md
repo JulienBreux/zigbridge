@@ -1,6 +1,6 @@
 # REST & WebSocket API Reference
 
-Zigbridge provides an embedded HTTP server exposing RESTful endpoints and a real-time WebSocket event stream for seamless integration with external scripts, home automation systems, and custom frontends.
+ZigBridge provides an embedded HTTP server exposing RESTful endpoints and a real-time WebSocket event stream for seamless integration with external scripts, home automation systems, and custom frontends.
 
 ---
 
@@ -190,7 +190,7 @@ curl -X POST http://localhost:8080/api/ai/recommendations/apply \
 
 ## WebSocket Event Stream (`GET /api/events`)
 
-Zigbridge broadcasts real-time events over a single persistent WebSocket connection at `ws://localhost:8080/api/events`.
+ZigBridge broadcasts real-time events over a single persistent WebSocket connection at `ws://localhost:8080/api/events`.
 
 ### Event Types & Payloads
 

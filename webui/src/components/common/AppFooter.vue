@@ -33,8 +33,8 @@ const formattedVersion = computed(() => {
           <span>GitHub</span>
         </a>
         <span class="text-gray-300 dark:text-gray-600">•</span>
-        <span class="font-mono text-[11px]" :title="commit ? `Commit: ${commit}` : 'Zigbridge Version'">
-          Zigbridge <span class="text-blue-500 font-semibold">{{ formattedVersion }}</span>
+        <span class="font-mono text-[11px]" :title="commit ? `Commit: ${commit}` : 'ZigBridge Version'">
+          ZigBridge <span class="text-blue-500 font-semibold">{{ formattedVersion }}</span>
         </span>
       </div>
 

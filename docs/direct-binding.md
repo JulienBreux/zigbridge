@@ -1,6 +1,6 @@
 # Direct Binding Deep Dive
 
-**Direct Zigbee Binding** is the core philosophy behind Zigbridge. It allows battery-powered switches, buttons, and motion sensors to communicate directly with light bulbs, smart plugs, and relays over the air—completely bypassing the coordinator and home automation server.
+**Direct Zigbee Binding** is the core philosophy behind ZigBridge. It allows battery-powered switches, buttons, and motion sensors to communicate directly with light bulbs, smart plugs, and relays over the air—completely bypassing the coordinator and home automation server.
 
 ---
 
@@ -23,7 +23,7 @@ flowchart TD
         Coord1 -->|8. Zigbee RF| Bulb1["Light Bulb"]
     end
 
-    subgraph Direct["Zigbridge Direct Binding (<15 ms)"]
+    subgraph Direct["ZigBridge Direct Binding (<15 ms)"]
         Switch2["Wall Switch"] -->|"Direct Zigbee RF Frame (1-hop)"| Bulb2["Light Bulb"]
     end
 ```
@@ -51,7 +51,7 @@ Every Zigbee device maintains an internal hardware **Binding Table** in its non-
 - **Target IEEE Address**: 64-bit hardware MAC of the receiver (e.g. `0x00124B001CA20002` - ceiling light).
 - **Target Endpoint**: The target sub-device (usually `1`).
 
-When you create a binding, Zigbridge sends a `ZDO Bind_req` command to the coordinator. The coordinator dispatches this request to the source switch. Once acknowledged, the switch writes the entry into its local flash memory. From that moment forward, pressing the switch transmits unicast or group frames directly to the target light.
+When you create a binding, ZigBridge sends a `ZDO Bind_req` command to the coordinator. The coordinator dispatches this request to the source switch. Once acknowledged, the switch writes the entry into its local flash memory. From that moment forward, pressing the switch transmits unicast or group frames directly to the target light.
 
 ---
 
@@ -73,8 +73,8 @@ Battery-powered switches are **Sleepy End Devices (SEDs)**. To conserve battery,
 
 In traditional tools, attempting to bind a sleeping switch often results in a timeout error (`Request timed out after 10000ms`) or prevents the user from submitting the form until the device is interviewed.
 
-### How Zigbridge Solves This:
-- **Optimistic Binding Acceptance**: Zigbridge accepts the binding request immediately, records it in the binding table, and responds with a status warning (`optimistic: true`).
+### How ZigBridge Solves This:
+- **Optimistic Binding Acceptance**: ZigBridge accepts the binding request immediately, records it in the binding table, and responds with a status warning (`optimistic: true`).
 - **Wake-up Pairing**: The user wakes the device (e.g., by pressing any button on the switch once), and the coordinator delivers the queued `ZDO Bind_req` during the switch's poll window.
 
 ---

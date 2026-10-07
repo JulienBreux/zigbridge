@@ -2,16 +2,16 @@
 
 ## Objective
 
-Restructure the project documentation to elevate Zigbridge's unique value proposition in the root [`README.md`](file:///Users/julienbreux/Projects/julienbreux/zigbridge/README.md), while offloading technical deep-dives, protocol specifications, API references, and hardware setups into a clean, dedicated [`docs/`](file:///Users/julienbreux/Projects/julienbreux/zigbridge/docs) directory.
+Restructure the project documentation to elevate ZigBridge's unique value proposition in the root [`README.md`](file:///Users/julienbreux/Projects/julienbreux/zigbridge/README.md), while offloading technical deep-dives, protocol specifications, API references, and hardware setups into a clean, dedicated [`docs/`](file:///Users/julienbreux/Projects/julienbreux/zigbridge/docs) directory.
 
 ### Target Audience & Persona
-- **Home Automators & General Users**: Visiting the GitHub repository to quickly understand why Zigbridge is superior for their smart home (instant direct binding, unbreakable network coordinator reliability, single-binary simplicity, friendly UI).
+- **Home Automators & General Users**: Visiting the GitHub repository to quickly understand why ZigBridge is superior for their smart home (instant direct binding, unbreakable network coordinator reliability, single-binary simplicity, friendly UI).
 - **Engineers & Integrators**: Looking for in-depth technical guides (REST/WebSocket APIs, Z-Stack/Ember architecture, TCP/RFC2217 details, Home Assistant discovery formats, AI hook configuration).
 
 ### Core Goals
 1. **Compelling Root README**:
    - Deliver a clear, punchy value proposition focused on *benefits over mechanics* (e.g., "Why Direct Binding matters: your switches work even if the server is off").
-   - Include a comparison matrix highlighting Zigbridge vs traditional bridges (latency, resilience, memory footprint, deployment model).
+   - Include a comparison matrix highlighting ZigBridge vs traditional bridges (latency, resilience, memory footprint, deployment model).
    - Provide a 3-step Quick Start (download/run binary, open web dashboard).
    - Link cleanly to modular guides in [`docs/`](file:///Users/julienbreux/Projects/julienbreux/zigbridge/docs).
 2. **Comprehensive `docs/` Knowledge Base**:
@@ -99,7 +99,7 @@ zigbridge/
 
 1. **`README.md` Transformation**:
    - Technical deep dives (ZCL buffer pools, raw REST tables, coordinator driver internals) are removed from the root README and replaced with a strong, benefits-driven value proposition.
-   - Includes a comparison table: *Zigbridge vs. Traditional Zigbee Bridges* (Zero-latency direct binding, network coordinator resilience, single binary, dual-mode UI).
+   - Includes a comparison table: *ZigBridge vs. Traditional Zigbee Bridges* (Zero-latency direct binding, network coordinator resilience, single binary, dual-mode UI).
    - Features a 60-second Quick Start guide.
    - Navigation links direct readers to relevant guides in `docs/`.
 2. **`docs/` Structure Established**:

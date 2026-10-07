@@ -35,7 +35,7 @@ const banner = `
  /_____|/ |\__, |_.__/|_|  |_|\__,_|\__, |\___|
       _/ | __/ |                     __/ |     
      |__/ |___/                     |___/      
- Zigbee-to-MQTT Bridge & Direct Binding Orchestrator
+ ZigBridge - Zigbee-to-MQTT Bridge & Direct Binding Orchestrator
 `
 
 // Execute runs the root command using background context.
@@ -63,8 +63,8 @@ func NewRootCmd(v *viper.Viper) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           "zigbridge",
-		Short:         "Zigbee-to-MQTT Bridge & Direct Binding Orchestrator",
-		Long:          strings.TrimPrefix(banner, "\n") + "\nZigbee-to-MQTT Bridge & Direct Binding Orchestrator",
+		Short:         "ZigBridge - Zigbee-to-MQTT Bridge & Direct Binding Orchestrator",
+		Long:          strings.TrimPrefix(banner, "\n"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -114,7 +114,7 @@ func NewRootCmd(v *viper.Viper) *cobra.Command {
 
 func runBridge(ctx context.Context, cfg *config.Config, loadedConfigFile string, out io.Writer) error {
 	printStr(out, banner)
-	log.Printf("[MAIN] Zigbridge v%s (commit: %s) starting up...", version.Version, version.Commit)
+	log.Printf("[MAIN] ZigBridge v%s (commit: %s) starting up...", version.Version, version.Commit)
 
 	if loadedConfigFile != "" {
 		log.Printf("[MAIN] Loaded configuration from %s", loadedConfigFile)
@@ -241,7 +241,7 @@ func runBridge(ctx context.Context, cfg *config.Config, loadedConfigFile string,
 		}
 	}
 
-	log.Printf("[READY] Zigbridge is operational. Press Ctrl+C to terminate.")
+	log.Printf("[READY] ZigBridge is operational. Press Ctrl+C to terminate.")
 
 	// 8. Graceful shutdown handler
 	sigCh := make(chan os.Signal, 1)
@@ -264,11 +264,11 @@ func runBridge(ctx context.Context, cfg *config.Config, loadedConfigFile string,
 		}
 	}
 
-	log.Printf("[SHUTDOWN] Stopping Zigbridge controller and radio subsystems...")
+	log.Printf("[SHUTDOWN] Stopping ZigBridge controller and radio subsystems...")
 	if err := ctrl.Stop(); err != nil {
 		log.Printf("[SHUTDOWN] Controller stop error: %v", err)
 	}
 
-	log.Printf("[SHUTDOWN] Zigbridge terminated cleanly.")
+	log.Printf("[SHUTDOWN] ZigBridge terminated cleanly.")
 	return nil
 }

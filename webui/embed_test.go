@@ -25,7 +25,7 @@ func TestDistFS(t *testing.T) {
 		t.Fatalf("failed to read index.html: %v", err)
 	}
 
-	if !strings.Contains(string(content), "Zigbridge") {
-		t.Errorf("expected index.html to contain 'Zigbridge', got: %s", string(content))
+	if !strings.Contains(string(content), "ZigBridge") {
+		t.Errorf("expected index.html to contain 'ZigBridge', got: %s", string(content))
 	}
 }

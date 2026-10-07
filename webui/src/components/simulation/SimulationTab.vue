@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { VirtualDeviceSummary } from '@/types'
-import { useZigbridgeApi } from '@/composables/useZigbridgeApi'
+import { useZigBridgeApi } from '@/composables/useZigBridgeApi'
 
 defineProps<{
   devices: VirtualDeviceSummary[]
@@ -11,7 +11,7 @@ const emit = defineEmits<{
   (e: 'spawn'): void
 }>()
 
-const api = useZigbridgeApi()
+const api = useZigBridgeApi()
 
 async function triggerAction(ieee: string, action: string) {
   try {

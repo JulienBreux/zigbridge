@@ -5,7 +5,7 @@
 Provide persistent local file storage for paired Zigbee devices and user-defined configurations (such as custom **Friendly Names**, models, manufacturers, endpoints, and cluster metadata) in a clean, human-readable YAML file (`data/devices.yaml`).
 
 ### The Problem
-Currently, the `DeviceRegistry` stores device records exclusively in-memory (`sync.RWMutex` map). When Zigbridge restarts:
+Currently, the `DeviceRegistry` stores device records exclusively in-memory (`sync.RWMutex` map). When ZigBridge restarts:
 1. User-customized **Friendly Names** (e.g. "Living Room Ceiling Light") are lost and revert to raw IEEE hex strings until manually renamed again.
 2. Device cluster metadata (endpoints, input clusters, output clusters) is discarded, requiring nodes to be re-interviewed over the air.
 3. Home Assistant MQTT discovery entities must wait for devices to broadcast active radio frames before entities appear in Home Assistant.
@@ -95,7 +95,7 @@ The YAML file is structured as a map keyed by 64-bit IEEE address for O(1) human
 
 ```yaml
 # ==============================================================================
-# Zigbridge Device Registry
+# ZigBridge Device Registry
 # Automatically generated and synchronized. Human-editable.
 # ==============================================================================
 
@@ -289,7 +289,7 @@ func (s *DeviceStore) ScheduleSave() {
 
 1. On clean start without `data/devices.yaml`, the system starts normally and creates `data/devices.yaml` upon the first paired device or rename.
 2. Renaming a device via `POST /api/devices/{ieee}/rename` updates `data/devices.yaml` with the new friendly name.
-3. Restarting the Zigbridge process restores all saved devices and friendly names into memory.
+3. Restarting the ZigBridge process restores all saved devices and friendly names into memory.
 4. Paired devices saved in `data/devices.yaml` automatically re-publish their Home Assistant MQTT discovery topics on bridge boot.
 5. `data/` is excluded by `.gitignore`.
 6. `make test` passes with zero race conditions (`-race`).

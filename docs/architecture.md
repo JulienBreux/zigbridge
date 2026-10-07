@@ -1,6 +1,6 @@
 # Architecture & Internals
 
-Zigbridge is designed from the ground up in modern Go for high reliability, minimal resource consumption (<25 MB RAM), and zero external runtime dependencies.
+ZigBridge is designed from the ground up in modern Go for high reliability, minimal resource consumption (<25 MB RAM), and zero external runtime dependencies.
 
 ---
 
@@ -70,7 +70,7 @@ The transport layer provides a uniform byte-stream abstraction (`io.ReadWriteClo
 - **Mock Transport (`mock.go`)**: An in-memory, thread-safe bidirectional pipe for tests.
 
 ### 2. Radio Adapter Layer (`internal/adapter`)
-Decoupled radio drivers translate raw vendor frames into standardized Zigbridge events:
+Decoupled radio drivers translate raw vendor frames into standardized ZigBridge events:
 - **TI Z-Stack 3.x (`zstack/`)**: Implements Texas Instruments Monitor and Test (MT) commands (`SYS`, `SAPI`, `AF`, `ZDO`, `UTIL`). Computes and verifies Frame Check Sequences (FCS) with zero allocations.
 - **Silicon Labs EmberZNet (`ember/`)**: Implements EZSP v8+ frame formatting and command exchange.
 - **Mock Adapter (`mock/`)**: Virtual coordinator simulating network joining, device interviews, and binding responses.
@@ -99,7 +99,7 @@ The central orchestrator maintains:
 
 ## Memory & Performance Metrics
 
-| Metric | Zigbridge | Typical Node.js Bridge |
+| Metric | ZigBridge | Typical Node.js Bridge |
 |---|---|---|
 | **Resident Memory (RSS)** | **<25 MB** | 150 - 350 MB |
 | **Binary Size** | **~7.8 MB** (Static, `CGO_ENABLED=0`) | >100 MB (with Node runtime) |

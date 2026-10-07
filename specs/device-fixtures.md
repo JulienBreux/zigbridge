@@ -55,7 +55,7 @@ make lint
 # Compile static binary
 make build
 
-# Run Zigbridge with mock adapter to interact with test devices
+# Run ZigBridge with mock adapter to interact with test devices
 ./bin/zigbridge -config data/config.yaml
 ```
 
@@ -303,7 +303,7 @@ A CLI command allows users and developers to import or scaffold new fixture file
 ./bin/zigbridge fixture import --json device_def.json --out fixtures/devices/custom_device.yaml
 ```
 
-The importer fetches/parses model, vendor, description, endpoints, and exposes into standard Zigbridge fixture YAML.
+The importer fetches/parses model, vendor, description, endpoints, and exposes into standard ZigBridge fixture YAML.
 
 ### 5. Web Dashboard Simulation Controls (`internal/web`)
 

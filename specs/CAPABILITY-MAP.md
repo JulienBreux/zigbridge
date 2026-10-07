@@ -1,4 +1,4 @@
-# Capability Map: Zigbridge
+# Capability Map: ZigBridge
 
 | Module ID | Responsibility | Depends On |
 |---|---|---|

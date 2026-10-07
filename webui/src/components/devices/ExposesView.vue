@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import type { Device, DeviceDefinition, DeviceExpose } from '@/types'
 import { getExposeIcon, getDeviceExposes } from '@/utils/formatters'
-import { useZigbridgeApi } from '@/composables/useZigbridgeApi'
+import { useZigBridgeApi } from '@/composables/useZigBridgeApi'
 
 const props = defineProps<{
   device: Device
@@ -14,7 +14,7 @@ const emit = defineEmits<{
   (e: 'updated'): void
 }>()
 
-const api = useZigbridgeApi()
+const api = useZigBridgeApi()
 
 const actionStates = ref<Record<string, { loading: boolean; done: boolean }>>({})
 

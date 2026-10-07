@@ -1,5 +1,5 @@
 # ==============================================================================
-# Zigbridge Configuration
+# ZigBridge Configuration
 # ==============================================================================
 # Modern, lightweight Zigbee-to-MQTT Bridge and Direct Binding Orchestrator.
 # Supports networked coordinators (SMLIGHT SLZB-06, TubeZB) and local USB serial.

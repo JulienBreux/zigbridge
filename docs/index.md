@@ -1,6 +1,6 @@
-# Zigbridge Documentation
+# ZigBridge Documentation
 
-Welcome to the official documentation for **Zigbridge**, the lightweight Zigbee-to-MQTT bridge and Direct Binding Orchestrator written in Go.
+Welcome to the official documentation for **ZigBridge**, the lightweight Zigbee-to-MQTT bridge and Direct Binding Orchestrator written in Go.
 
 ---
 

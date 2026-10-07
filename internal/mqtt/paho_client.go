@@ -11,7 +11,7 @@ import (
 	"github.com/julienbreux/zigbridge/internal/config"
 )
 
-// PahoClient wraps the Eclipse Paho MQTT client for Zigbridge.
+// PahoClient wraps the Eclipse Paho MQTT client for ZigBridge.
 type PahoClient struct {
 	cfg    config.MQTTConfig
 	client paho.Client

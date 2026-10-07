@@ -2,9 +2,9 @@
 
 ## 1. Executive Summary & Objective
 
-As Zigbridge expands its catalog of supported Zigbee devices (such as Tuya energy meters, LiXee TIC teleinformation sensors, IKEA multi-button remotes, Develco alarm sirens, and Aqara sensors), routing raw ZCL cluster frames directly inside `internal/controller/controller.go` creates a monolithic maintenance bottleneck.
+As ZigBridge expands its catalog of supported Zigbee devices (such as Tuya energy meters, LiXee TIC teleinformation sensors, IKEA multi-button remotes, Develco alarm sirens, and Aqara sensors), routing raw ZCL cluster frames directly inside `internal/controller/controller.go` creates a monolithic maintenance bottleneck.
 
-This specification details the refactoring strategy to transition `internal/controller` from hardcoded cluster switch-cases to a **modular, declarative, zero-allocation Converter Pipeline** (`internal/converter`) inspired by modern Zigbee architectures while adhering to Go idioms and Zigbridge's strict performance targets (`<25 MB` RSS, zero heap churn via buffer pooling).
+This specification details the refactoring strategy to transition `internal/controller` from hardcoded cluster switch-cases to a **modular, declarative, zero-allocation Converter Pipeline** (`internal/converter`) inspired by modern Zigbee architectures while adhering to Go idioms and ZigBridge's strict performance targets (`<25 MB` RSS, zero heap churn via buffer pooling).
 
 ---
 
@@ -166,7 +166,7 @@ func (c *Controller) publishDeviceDiscovery(dev *Device) {
 		Identifiers:  []string{dev.IEEE},
 		Name:         cmp.Or(dev.FriendlyName, dev.IEEE),
 		Model:        cmp.Or(dev.Model, "Zigbee Device"),
-		Manufacturer: cmp.Or(dev.Manufacturer, "Zigbridge"),
+		Manufacturer: cmp.Or(dev.Manufacturer, "ZigBridge"),
 	}
 
 	// 2. Fetch definition from fixture registry

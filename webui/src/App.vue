@@ -11,8 +11,8 @@ import type {
   RawLogItem,
   TabId,
 } from '@/types'
-import { useZigbridgeApi } from '@/composables/useZigbridgeApi'
-import { useZigbridgeWs } from '@/composables/useZigbridgeWs'
+import { useZigBridgeApi } from '@/composables/useZigBridgeApi'
+import { useZigBridgeWs } from '@/composables/useZigBridgeWs'
 import { useRouter } from '@/composables/useRouter'
 import { sortDevicesByFriendlyName } from '@/utils/formatters'
 
@@ -37,8 +37,8 @@ import CreateBindingModal from '@/components/modals/CreateBindingModal.vue'
 import SpawnDeviceModal from '@/components/modals/SpawnDeviceModal.vue'
 
 // API & WS Clients
-const api = useZigbridgeApi()
-const { addEventListener } = useZigbridgeWs()
+const api = useZigBridgeApi()
+const { addEventListener } = useZigBridgeWs()
 
 // State
 const status = ref<BridgeStatus | null>(null)

@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue'
 import ModalDialog from '@/components/common/ModalDialog.vue'
 import { useMode } from '@/composables/useMode'
-import { useZigbridgeApi } from '@/composables/useZigbridgeApi'
+import { useZigBridgeApi } from '@/composables/useZigBridgeApi'
 import type { DefinitionSummary } from '@/types'
 
 const props = defineProps<{
@@ -15,7 +15,7 @@ const emit = defineEmits<{
 }>()
 
 const { isAdvanced } = useMode()
-const api = useZigbridgeApi()
+const api = useZigBridgeApi()
 
 const definitions = ref<DefinitionSummary[]>([])
 const selectedModel = ref('')

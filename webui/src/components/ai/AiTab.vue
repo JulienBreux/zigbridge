@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import type { Recommendation, Device } from '@/types'
 import { clusterName } from '@/utils/clusters'
-import { useZigbridgeApi } from '@/composables/useZigbridgeApi'
+import { useZigBridgeApi } from '@/composables/useZigBridgeApi'
 
 const props = defineProps<{
   recommendations: Recommendation[]
@@ -15,7 +15,7 @@ const emit = defineEmits<{
   (e: 'applied'): void
 }>()
 
-const api = useZigbridgeApi()
+const api = useZigBridgeApi()
 const isLoading = ref(false)
 const isDisabledInConfig = ref(false)
 const errorMessage = ref<string | null>(null)

@@ -1,6 +1,6 @@
 # Project Maintainers
 
-This document lists the maintainers of **Zigbridge** and describes the project governance, roles, and responsibilities.
+This document lists the maintainers of **ZigBridge** and describes the project governance, roles, and responsibilities.
 
 ---
 
@@ -14,7 +14,7 @@ This document lists the maintainers of **Zigbridge** and describes the project g
 
 ## Roles & Responsibilities
 
-Maintainers are responsible for the health, stability, and future of the Zigbridge project. Core responsibilities include:
+Maintainers are responsible for the health, stability, and future of the ZigBridge project. Core responsibilities include:
 
 1. **Code Review & Quality Enforcement**:
    - Review pull requests against the project's engineering principles: Go modernization, zero-allocation memory pooling (`sync.Pool`), sub-15ms direct binding performance, and offline-first CDN-free web UI.
@@ -33,7 +33,7 @@ Maintainers are responsible for the health, stability, and future of the Zigbrid
 
 ## Decision-Making Process
 
-Zigbridge follows a **consensus-seeking model** grounded in clear specifications:
+ZigBridge follows a **consensus-seeking model** grounded in clear specifications:
 
 - **Minor Changes & Bug Fixes**:
   - Can be approved and merged by any maintainer once CI passes and acceptance criteria are satisfied.

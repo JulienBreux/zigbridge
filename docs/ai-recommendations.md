@@ -1,6 +1,6 @@
 # AI Telemetry & Smart Recommendations
 
-Zigbridge includes an on-demand **Smart Recommendation Engine** designed to discover device usage patterns and recommend optimal direct hardware bindings and scenes.
+ZigBridge includes an on-demand **Smart Recommendation Engine** designed to discover device usage patterns and recommend optimal direct hardware bindings and scenes.
 
 ---
 
@@ -8,7 +8,7 @@ Zigbridge includes an on-demand **Smart Recommendation Engine** designed to disc
 
 Many smart home users don't know which switches can be directly bound to which lights, or they forget that direct binding is possible.
 
-Zigbridge solves this without intrusive background automation:
+ZigBridge solves this without intrusive background automation:
 - **No Background Guessing**: The engine runs strictly **on-demand** when requested via the Web Dashboard or API.
 - **Human-in-the-Loop**: Recommendations are presented with a confidence score and plain-English rationale; no binding is written to hardware flash until you click **Apply**.
 - **Zero Cloud Requirement**: The default heuristic engine is 100% offline and deterministic.
@@ -17,12 +17,12 @@ Zigbridge solves this without intrusive background automation:
 
 ## 1. Circular Telemetry Ring Buffer
 
-Zigbridge maintains a thread-safe, bounded circular buffer in memory (`max_event_history: 2000`). It records recent network interactions:
+ZigBridge maintains a thread-safe, bounded circular buffer in memory (`max_event_history: 2000`). It records recent network interactions:
 - Device reports and command invocations (e.g., button press timestamps).
 - State changes (e.g., light bulb on/off transitions).
 - Discovered device clusters and endpoints.
 
-Because the buffer is bounded, memory usage remains strictly capped at a few kilobytes regardless of how long Zigbridge runs. When disabled, telemetry recording is skipped entirely to maintain zero heap allocations per radio frame.
+Because the buffer is bounded, memory usage remains strictly capped at a few kilobytes regardless of how long ZigBridge runs. When disabled, telemetry recording is skipped entirely to maintain zero heap allocations per radio frame.
 
 ---
 
@@ -45,7 +45,7 @@ The rule-based analyzer evaluates network topology and cluster capabilities:
 - Generates instant direct binding proposals without requiring external APIs or GPU resources.
 
 ### Option B: External LLM Hook (`external_llm`)
-For advanced topology reasoning, Zigbridge can dispatch an anonymized snapshot of your network topology and event logs to a local LLM (e.g. Ollama running Llama 3 or Mistral) or an external OpenAI-compatible endpoint:
+For advanced topology reasoning, ZigBridge can dispatch an anonymized snapshot of your network topology and event logs to a local LLM (e.g. Ollama running Llama 3 or Mistral) or an external OpenAI-compatible endpoint:
 
 ```yaml
 ai:

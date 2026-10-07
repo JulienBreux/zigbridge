@@ -209,7 +209,7 @@ const permitJoinText = computed(() => {
             </span>
           </div>
           <div class="flex justify-between py-2">
-            <span class="text-slate-500 dark:text-slate-400">Zigbridge Version</span>
+            <span class="text-slate-500 dark:text-slate-400">ZigBridge Version</span>
             <span class="font-mono text-slate-800 dark:text-slate-200">{{ appVersion }}</span>
           </div>
           <div class="flex justify-between py-2">

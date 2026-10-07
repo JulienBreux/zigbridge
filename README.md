@@ -1,21 +1,21 @@
-# Zigbridge
+# ZigBridge
 
 [![Go Version](https://img.shields.io/badge/Go-1.27+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/julienbreux/zigbridge/actions/workflows/ci.yml/badge.svg)](https://github.com/julienbreux/zigbridge/actions/workflows/ci.yml)
 [![Release](https://github.com/julienbreux/zigbridge/actions/workflows/release.yml/badge.svg)](https://github.com/julienbreux/zigbridge/actions/workflows/release.yml)
 
-**Zigbridge** is a next-generation Zigbee-to-MQTT bridge and **Direct Binding Orchestrator** built for speed, resilience, and simplicity.
+**ZigBridge** is a next-generation Zigbee-to-MQTT bridge and **Direct Binding Orchestrator** built for speed, resilience, and simplicity.
 
 It connects battery remotes, wall switches, and sensors **directly to lights and plugs over the air**. Your smart home responds in less than 15 milliseconds and **keeps working even when your server, Wi-Fi router, or coordinator is completely offline**.
 
 ---
 
-## Why Zigbridge?
+## Why ZigBridge?
 
 Traditional smart home bridges route every button press through multiple network hops and software servers. When your Wi-Fi hiccups or your server restarts for an update, the lights in your house stop turning on.
 
-Zigbridge changes the paradigm: it uses the coordinator to orchestrate direct hardware bindings, then steps out of the way.
+ZigBridge changes the paradigm: it uses the coordinator to orchestrate direct hardware bindings, then steps out of the way.
 
 ```mermaid
 flowchart LR
@@ -24,7 +24,7 @@ flowchart LR
         S1["Wall Switch"] -->|1| C1["Coordinator"] -->|2| B1["Bridge"] -->|3| H1["Server"] -->|4| B1 -->|5| C1 -->|6| L1["Light"]
     end
 
-    subgraph Direct["Zigbridge Direct Binding (<15 ms)"]
+    subgraph Direct["ZigBridge Direct Binding (<15 ms)"]
         direction LR
         S2["Wall Switch"] -->|"Direct RF Frame (1 Hop)"| L2["Light"]
     end
@@ -32,7 +32,7 @@ flowchart LR
 
 ### The Difference at a Glance
 
-| Capability | Traditional Zigbee Bridges | Zigbridge |
+| Capability | Traditional Zigbee Bridges | ZigBridge |
 |---|---|---|
 | **Switch Latency** | 150 – 300 ms (multi-hop software round-trip) | **<15 ms (direct over-the-air RF)** |
 | **Server / Wi-Fi Outage** | ❌ Switches stop working | **✅ Switches ALWAYS work (100% offline)** |
@@ -50,7 +50,7 @@ flowchart LR
 Program battery switches and remotes to communicate directly with light bulbs and relays. Dim lights smoothly, toggle scenes instantly, and rest easy knowing that if your home automation server crashes, your family can still turn on the lights.
 
 ### 🌐 Built for SMLIGHT SLZB-06 & Network Coordinators
-Most bridges treat network-attached coordinators as an afterthought. Zigbridge features first-class support for Ethernet/PoE and Wi-Fi coordinators (like the **SMLIGHT SLZB-06** and **TubeZB**) with active TCP keepalive probes, Telnet RFC2217 filtering, and automatic exponential backoff reconnection.
+Most bridges treat network-attached coordinators as an afterthought. ZigBridge features first-class support for Ethernet/PoE and Wi-Fi coordinators (like the **SMLIGHT SLZB-06** and **TubeZB**) with active TCP keepalive probes, Telnet RFC2217 filtering, and automatic exponential backoff reconnection.
 
 ### 📦 Ultra-Lightweight Single Binary
 Written in pure, idiomatic Go with zero CGO dependencies. Runs comfortably on low-spec hardware (from a 128 MB RAM OpenWrt router or Raspberry Pi to a high-density Proxmox server) with near-zero CPU usage and zero-allocation packet pooling.
@@ -64,7 +64,7 @@ A clean, embedded dashboard served straight from the binary with zero external C
 Paired devices automatically announce their capabilities via standard Home Assistant MQTT discovery topics. Sensors, switches, lights, and bridge health entities appear in your Home Assistant dashboard instantly.
 
 ### 🧠 On-Demand Smart Binding Recommendations
-An in-memory circular telemetry buffer monitors event patterns. With one click, ask Zigbridge to analyze your network and propose direct hardware bindings and multi-way switch automations—either using fast local heuristics or an external LLM hook.
+An in-memory circular telemetry buffer monitors event patterns. With one click, ask ZigBridge to analyze your network and propose direct hardware bindings and multi-way switch automations—either using fast local heuristics or an external LLM hook.
 
 ---
 
@@ -102,7 +102,7 @@ adapter:
 ```bash
 ./bin/zigbridge
 ```
-*(Zigbridge automatically detects `data/config.yaml`, falling back to `config.yaml` or `config.yaml.dist`. You can also specify an explicit path with `./bin/zigbridge -config path/to/config.yaml`).*
+*(ZigBridge automatically detects `data/config.yaml`, falling back to `config.yaml` or `config.yaml.dist`. You can also specify an explicit path with `./bin/zigbridge -config path/to/config.yaml`).*
 
 Open your browser at **[http://localhost:8080](http://localhost:8080)** to access the Web Management Dashboard.
 

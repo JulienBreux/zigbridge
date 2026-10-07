@@ -31,7 +31,7 @@ const (
 	AdapterTypeMock   AdapterType = "mock"   // Mock adapter for testing/development
 )
 
-// Config represents the top-level Zigbridge configuration.
+// Config represents the top-level ZigBridge configuration.
 type Config struct {
 	LogLevel  string          `yaml:"log_level" mapstructure:"log_level"`
 	Transport TransportConfig `yaml:"transport" mapstructure:"transport"`

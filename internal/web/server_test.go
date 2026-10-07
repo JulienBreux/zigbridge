@@ -80,8 +80,8 @@ func TestWebStaticAssetsAndSPAFallback(t *testing.T) {
 		t.Errorf("expected 200 OK for '/', got %d", resp.StatusCode)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "Zigbridge") {
-		t.Errorf("expected index.html to contain 'Zigbridge'")
+	if !strings.Contains(string(body), "ZigBridge") {
+		t.Errorf("expected index.html to contain 'ZigBridge'")
 	}
 
 	// Test 2: Direct index.html request
@@ -115,8 +115,8 @@ func TestWebStaticAssetsAndSPAFallback(t *testing.T) {
 			t.Errorf("expected 200 OK for SPA route %s, got %d", route, r.StatusCode)
 		}
 		b, _ := io.ReadAll(r.Body)
-		if !strings.Contains(string(b), "Zigbridge") {
-			t.Errorf("expected %s to fallback to index.html containing 'Zigbridge'", route)
+		if !strings.Contains(string(b), "ZigBridge") {
+			t.Errorf("expected %s to fallback to index.html containing 'ZigBridge'", route)
 		}
 	}
 
@@ -183,7 +183,7 @@ func TestWebStaticAssetsAndSPAFallback(t *testing.T) {
 
 	// Test 7: Custom static FS override using SetStaticFS
 	customFS := fstest.MapFS{
-		"index.html": &fstest.MapFile{Data: []byte("<html>Custom Zigbridge</html>")},
+		"index.html": &fstest.MapFile{Data: []byte("<html>Custom ZigBridge</html>")},
 		"test.txt":   &fstest.MapFile{Data: []byte("hello world")},
 	}
 	srv.SetStaticFS(customFS)

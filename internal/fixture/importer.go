@@ -42,7 +42,7 @@ func (f *DefaultHTTPFetcher) Get(url string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Zigbridge-Fixture-Importer/1.0")
+	req.Header.Set("User-Agent", "ZigBridge-Fixture-Importer/1.0")
 	return f.client.Do(req)
 }
 

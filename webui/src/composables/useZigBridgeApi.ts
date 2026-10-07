@@ -37,7 +37,7 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export function useZigbridgeApi() {
+export function useZigBridgeApi() {
   async function getStatus(): Promise<StatusResponse> {
     return request<StatusResponse>('/api/status')
   }

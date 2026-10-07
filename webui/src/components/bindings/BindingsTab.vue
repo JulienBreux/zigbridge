@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Binding, Device } from '@/types'
 import { useMode } from '@/composables/useMode'
-import { useZigbridgeApi } from '@/composables/useZigbridgeApi'
+import { useZigBridgeApi } from '@/composables/useZigBridgeApi'
 import { clusterName } from '@/utils/clusters'
 
 const props = defineProps<{
@@ -16,7 +16,7 @@ const emit = defineEmits<{
 }>()
 
 const { isAdvanced } = useMode()
-const api = useZigbridgeApi()
+const api = useZigBridgeApi()
 
 function getDeviceName(ieee: string): string {
   const dev = props.devices.find(d => d.ieee === ieee)

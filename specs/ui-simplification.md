@@ -70,7 +70,7 @@ internal/web/
 ## Code Style & UX Specification
 
 ### 1. Header Layout
-- **Left**: Zigbridge logo and title.
+- **Left**: ZigBridge logo and title.
 - **Center / Status Indicators**:
   - **Coordinator Status Badge**: Simple pill with colored pulse dot (`● Online` / `○ Connecting` / `✕ Offline`).
   - **MQTT Status Badge**: Simple pill with colored pulse dot (`● MQTT Connected` / `○ MQTT Disabled`).

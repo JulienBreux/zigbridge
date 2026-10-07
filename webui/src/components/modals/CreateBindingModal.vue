@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import ModalDialog from '@/components/common/ModalDialog.vue'
 import { useMode } from '@/composables/useMode'
-import { useZigbridgeApi } from '@/composables/useZigbridgeApi'
+import { useZigBridgeApi } from '@/composables/useZigBridgeApi'
 import { sortDevicesByFriendlyName, getDeviceDisplayName } from '@/utils/formatters'
 import type { Device } from '@/types'
 
@@ -18,7 +18,7 @@ const emit = defineEmits<{
 }>()
 
 const { isAdvanced } = useMode()
-const api = useZigbridgeApi()
+const api = useZigBridgeApi()
 
 const sortedDevices = computed(() => sortDevicesByFriendlyName([...props.devices]))
 

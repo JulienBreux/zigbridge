@@ -2,7 +2,7 @@
 
 ## 1. Objective
 
-Provide a dedicated, full-featured **Device Detail Page** within the embedded Zigbridge dashboard ([`internal/web/static/`](file:///Users/julienbreux/Projects/julienbreux/zigbridge/internal/web/static/)). This view enables users to inspect comprehensive hardware & network metadata ("About Section") and interact with physical/virtual device capabilities ("Exposes & Controls Section") matching the Zigbee2MQTT device control design (as seen in the reference screenshot).
+Provide a dedicated, full-featured **Device Detail Page** within the embedded ZigBridge dashboard ([`internal/web/static/`](file:///Users/julienbreux/Projects/julienbreux/zigbridge/internal/web/static/)). This view enables users to inspect comprehensive hardware & network metadata ("About Section") and interact with physical/virtual device capabilities ("Exposes & Controls Section") matching the Zigbee2MQTT device control design (as seen in the reference screenshot).
 
 ### User Stories
 - **As a smart home user**, when I click on a device in the Devices list, I want to navigate to a dedicated detail page with a clean back button (`← Back to Devices`) so I can focus on that specific device.
