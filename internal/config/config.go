@@ -362,7 +362,7 @@ func parseNetworkKeyNode(node *yaml.Node) (string, error) {
 // NetworkConfig defines mesh network behaviors.
 type NetworkConfig struct {
 	PermitJoinDuration uint8 `yaml:"permit_join_duration" mapstructure:"permit_join_duration"` // Default duration in seconds (254 = max, 0 = off)
-	PermitJoinOnStart  bool  `yaml:"permit_join_on_start" mapstructure:"permit_join_on_start"`   // Automatically open joining at startup
+	PermitJoinOnStart  bool  `yaml:"permit_join_on_start" mapstructure:"permit_join_on_start"` // Automatically open joining at startup
 }
 
 // MQTTConfig defines MQTT broker settings and Home Assistant discovery.

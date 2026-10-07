@@ -47,9 +47,9 @@ type Server struct {
 	cfg        *config.WebConfig
 	controller *controller.Controller
 	httpServer *http.Server
-	listener net.Listener
-	staticMu sync.RWMutex
-	staticFS fs.FS
+	listener   net.Listener
+	staticMu   sync.RWMutex
+	staticFS   fs.FS
 
 	clientsMu sync.RWMutex
 	clients   map[*websocket.Conn]struct{}
