@@ -27,29 +27,32 @@ all: build
 webui:
 	@echo "==> Building web UI in webui/..."
 	@if [ -d "webui" ]; then \
-		if [ -d "webui/node_modules" ]; then \
+		if [ -f "webui/node_modules/.bin/vue-tsc" ]; then \
 			if command -v npm >/dev/null 2>&1; then \
 				(cd webui && npm run build); \
 			elif command -v pnpm >/dev/null 2>&1; then \
 				(cd webui && pnpm build); \
 			fi; \
-		elif [ -d "webui/dist" ] && [ -n "$$(ls -A webui/dist 2>/dev/null)" ]; then \
-			echo "==> webui/node_modules not found; using pre-built webui/dist (run 'cd webui && npm install' to build from source)"; \
 		elif command -v npm >/dev/null 2>&1; then \
 			echo "==> Installing web UI dependencies..."; \
-			(cd webui && (npm ci || npm install) && npm run build); \
+			(cd webui && npm install && npm run build); \
 		elif command -v pnpm >/dev/null 2>&1; then \
 			echo "==> Installing web UI dependencies..."; \
 			(cd webui && pnpm install && pnpm build); \
+		elif [ -d "webui/dist" ] && [ -n "$$(ls -A webui/dist 2>/dev/null)" ]; then \
+			echo "==> No npm/pnpm found, using pre-built webui/dist"; \
 		else \
-			echo "==> Error: webui/dist not found and neither npm nor pnpm is available" >&2; \
+			echo "==> Error: npm or pnpm is required to build webui and webui/dist is missing" >&2; \
 			exit 1; \
 		fi; \
 	fi
 
 ## build: Build static single binary with zero external dependencies (CGO_ENABLED=0)
 .PHONY: build
-build: webui
+build:
+	@if [ ! -d "webui/dist" ] || [ -z "$$(ls -A webui/dist 2>/dev/null)" ]; then \
+		$(MAKE) webui; \
+	fi
 	@echo "==> Building static binary $(BIN_DIR)/$(BINARY_NAME) (CGO_ENABLED=0)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_SRC)
@@ -57,7 +60,10 @@ build: webui
 
 ## cross-compile: Build static binaries for Linux, macOS, and Windows
 .PHONY: cross-compile
-cross-compile: webui
+cross-compile:
+	@if [ ! -d "webui/dist" ] || [ -z "$$(ls -A webui/dist 2>/dev/null)" ]; then \
+		$(MAKE) webui; \
+	fi
 	@echo "==> Cross-compiling static binaries..."
 	@mkdir -p $(BIN_DIR)
 	# Linux x86_64
