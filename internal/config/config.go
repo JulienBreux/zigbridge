@@ -33,38 +33,38 @@ const (
 
 // Config represents the top-level Zigbridge configuration.
 type Config struct {
-	LogLevel  string          `yaml:"log_level"`
-	Transport TransportConfig `yaml:"transport"`
-	Adapter   AdapterConfig   `yaml:"adapter"`
-	Advanced  *AdapterConfig  `yaml:"advanced,omitempty"` // For compatibility with Zigbee2MQTT configuration.yaml
-	Network   NetworkConfig   `yaml:"network"`
-	MQTT      MQTTConfig      `yaml:"mqtt"`
-	Web       WebConfig       `yaml:"web"`
-	AI        AIConfig        `yaml:"ai"`
-	Storage   StorageConfig   `yaml:"storage"`
+	LogLevel  string          `yaml:"log_level" mapstructure:"log_level"`
+	Transport TransportConfig `yaml:"transport" mapstructure:"transport"`
+	Adapter   AdapterConfig   `yaml:"adapter" mapstructure:"adapter"`
+	Advanced  *AdapterConfig  `yaml:"advanced,omitempty" mapstructure:"advanced,omitempty"` // For compatibility with Zigbee2MQTT configuration.yaml
+	Network   NetworkConfig   `yaml:"network" mapstructure:"network"`
+	MQTT      MQTTConfig      `yaml:"mqtt" mapstructure:"mqtt"`
+	Web       WebConfig       `yaml:"web" mapstructure:"web"`
+	AI        AIConfig        `yaml:"ai" mapstructure:"ai"`
+	Storage   StorageConfig   `yaml:"storage" mapstructure:"storage"`
 }
 
 // TransportConfig defines transport layer options for serial or networked coordinators.
 type TransportConfig struct {
-	Type                 TransportType `yaml:"type"`                   // "tcp" or "serial"
-	URL                  string        `yaml:"url"`                    // e.g. "tcp://192.168.1.50:6638" for SLZB-06
-	Port                 string        `yaml:"port"`                   // e.g. "/dev/ttyUSB0"
-	BaudRate             int           `yaml:"baudrate"`               // e.g. 115200
-	ReconnectInterval    time.Duration `yaml:"reconnect_interval"`     // Base reconnect delay
-	MaxReconnectInterval time.Duration `yaml:"max_reconnect_interval"` // Max exponential backoff
-	TCPKeepAlive         time.Duration `yaml:"tcp_keepalive"`          // TCP keepalive probe interval
-	RFC2217              bool          `yaml:"rfc2217"`                // Enable RFC2217 telnet negotiation/bypass
-	ReadTimeout          time.Duration `yaml:"read_timeout"`
-	WriteTimeout         time.Duration `yaml:"write_timeout"`
+	Type                 TransportType `yaml:"type" mapstructure:"type"`                                     // "tcp" or "serial"
+	URL                  string        `yaml:"url" mapstructure:"url"`                                       // e.g. "tcp://192.168.1.50:6638" for SLZB-06
+	Port                 string        `yaml:"port" mapstructure:"port"`                                     // e.g. "/dev/ttyUSB0"
+	BaudRate             int           `yaml:"baudrate" mapstructure:"baudrate"`                             // e.g. 115200
+	ReconnectInterval    time.Duration `yaml:"reconnect_interval" mapstructure:"reconnect_interval"`         // Base reconnect delay
+	MaxReconnectInterval time.Duration `yaml:"max_reconnect_interval" mapstructure:"max_reconnect_interval"` // Max exponential backoff
+	TCPKeepAlive         time.Duration `yaml:"tcp_keepalive" mapstructure:"tcp_keepalive"`                   // TCP keepalive probe interval
+	RFC2217              bool          `yaml:"rfc2217" mapstructure:"rfc2217"`                               // Enable RFC2217 telnet negotiation/bypass
+	ReadTimeout          time.Duration `yaml:"read_timeout" mapstructure:"read_timeout"`
+	WriteTimeout         time.Duration `yaml:"write_timeout" mapstructure:"write_timeout"`
 }
 
 // AdapterConfig specifies the Zigbee radio coprocessor protocol and PAN parameters.
 type AdapterConfig struct {
-	Type       AdapterType `yaml:"type"`        // "zstack", "ember", or "mock"
-	PanID      uint16      `yaml:"pan_id"`      // 16-bit PAN ID
-	ExtPanID   string      `yaml:"ext_pan_id"`  // 64-bit Extended PAN ID (hex string or byte array)
-	Channel    uint8       `yaml:"channel"`     // Zigbee channel (11-26)
-	NetworkKey string      `yaml:"network_key"` // 16-byte network key (hex string or byte array)
+	Type       AdapterType `yaml:"type" mapstructure:"type"`               // "zstack", "ember", or "mock"
+	PanID      uint16      `yaml:"pan_id" mapstructure:"pan_id"`           // 16-bit PAN ID
+	ExtPanID   string      `yaml:"ext_pan_id" mapstructure:"ext_pan_id"`   // 64-bit Extended PAN ID (hex string or byte array)
+	Channel    uint8       `yaml:"channel" mapstructure:"channel"`         // Zigbee channel (11-26)
+	NetworkKey string      `yaml:"network_key" mapstructure:"network_key"` // 16-byte network key (hex string or byte array)
 }
 
 // UnmarshalYAML implements custom unmarshaling to support both standard hex string formats
@@ -117,58 +117,210 @@ func (a *AdapterConfig) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-func parsePanIDNode(node *yaml.Node) (uint16, error) {
-	if node.Kind != yaml.ScalarNode {
-		return 0, fmt.Errorf("pan_id must be an integer or hex string, got node kind %d", node.Kind)
-	}
-	valStr := strings.TrimSpace(node.Value)
-	if strings.EqualFold(valStr, "generate") {
-		var b [2]byte
-		_, _ = rand.Read(b[:])
-		val := (uint16(b[0])<<8 | uint16(b[1])) & 0xFFFE
-		if val == 0 {
-			val = 0x1A62
+// ParsePanID converts a string, integer, or "generate" token into a 16-bit Zigbee PAN ID.
+func ParsePanID(val any) (uint16, error) {
+	switch v := val.(type) {
+	case uint16:
+		return v, nil
+	case int:
+		if v < 0 || v > 0xFFFF {
+			return 0, fmt.Errorf("pan_id out of range (0-65535): %d", v)
 		}
-		return val, nil
-	}
-	if strings.HasPrefix(strings.ToLower(valStr), "0x") {
-		parsed, err := strconv.ParseUint(valStr[2:], 16, 16)
-		if err != nil {
-			return 0, fmt.Errorf("invalid hex pan_id '%s': %w", valStr, err)
+		return uint16(v), nil
+	case int64:
+		if v < 0 || v > 0xFFFF {
+			return 0, fmt.Errorf("pan_id out of range (0-65535): %d", v)
 		}
-		return uint16(parsed), nil
+		return uint16(v), nil
+	case uint:
+		if v > 0xFFFF {
+			return 0, fmt.Errorf("pan_id out of range (0-65535): %d", v)
+		}
+		return uint16(v), nil
+	case uint64:
+		if v > 0xFFFF {
+			return 0, fmt.Errorf("pan_id out of range (0-65535): %d", v)
+		}
+		return uint16(v), nil
+	case float64:
+		if v < 0 || v > 0xFFFF {
+			return 0, fmt.Errorf("pan_id out of range (0-65535): %f", v)
+		}
+		return uint16(v), nil
+	case string:
+		valStr := strings.TrimSpace(v)
+		if strings.EqualFold(valStr, "generate") {
+			var b [2]byte
+			_, _ = rand.Read(b[:])
+			genVal := (uint16(b[0])<<8 | uint16(b[1])) & 0xFFFE
+			if genVal == 0 {
+				genVal = 0x1A62
+			}
+			return genVal, nil
+		}
+		if strings.HasPrefix(strings.ToLower(valStr), "0x") {
+			parsed, err := strconv.ParseUint(valStr[2:], 16, 16)
+			if err != nil {
+				return 0, fmt.Errorf("invalid hex pan_id '%s': %w", valStr, err)
+			}
+			return uint16(parsed), nil
+		}
+		// Try decimal first (e.g. 44982 or 6754)
+		parsed, err := strconv.ParseUint(valStr, 10, 16)
+		if err == nil {
+			return uint16(parsed), nil
+		}
+		// Try hex without 0x
+		parsed, err = strconv.ParseUint(valStr, 16, 16)
+		if err == nil {
+			return uint16(parsed), nil
+		}
+		return 0, fmt.Errorf("invalid pan_id '%s': must be a valid 16-bit integer", valStr)
+	default:
+		return 0, fmt.Errorf("unsupported pan_id type %T", val)
 	}
-	// Try decimal first (e.g. 44982 or 6754)
-	parsed, err := strconv.ParseUint(valStr, 10, 16)
-	if err == nil {
-		return uint16(parsed), nil
-	}
-	// Try hex without 0x
-	parsed, err = strconv.ParseUint(valStr, 16, 16)
-	if err == nil {
-		return uint16(parsed), nil
-	}
-	return 0, fmt.Errorf("invalid pan_id '%s': must be a valid 16-bit integer", valStr)
 }
 
-func parseExtPanIDNode(node *yaml.Node) (string, error) {
-	switch node.Kind {
-	case yaml.ScalarNode:
-		valStr := strings.TrimSpace(node.Value)
+// ParseExtPanID converts a hex string, byte array/slice, or "generate" token into an 18-char Extended PAN ID ("0x" + 16 hex chars).
+func ParseExtPanID(val any) (string, error) {
+	switch v := val.(type) {
+	case string:
+		valStr := strings.TrimSpace(v)
 		if strings.EqualFold(valStr, "generate") {
 			var b [8]byte
 			_, _ = rand.Read(b[:])
 			return "0x" + strings.ToUpper(hex.EncodeToString(b[:])), nil
 		}
-		if !strings.HasPrefix(strings.ToLower(valStr), "0x") {
-			valStr = "0x" + valStr
+		clean := valStr
+		if strings.HasPrefix(strings.ToLower(clean), "0x") {
+			clean = clean[2:]
 		}
-		return strings.ToUpper(valStr[:2]) + strings.ToUpper(valStr[2:]), nil
-	case yaml.SequenceNode:
-		if len(node.Content) != 8 {
-			return "", fmt.Errorf("ext_pan_id byte array must contain exactly 8 bytes (got %d)", len(node.Content))
+		if len(clean) != 16 {
+			return "", fmt.Errorf("ext_pan_id must be 16 hex characters (got %d)", len(clean))
+		}
+		if _, err := hex.DecodeString(clean); err != nil {
+			return "", fmt.Errorf("invalid hex ext_pan_id '%s': %w", valStr, err)
+		}
+		return "0x" + strings.ToUpper(clean), nil
+	case []byte:
+		if len(v) != 8 {
+			return "", fmt.Errorf("ext_pan_id byte array must contain exactly 8 bytes (got %d)", len(v))
+		}
+		return "0x" + strings.ToUpper(hex.EncodeToString(v)), nil
+	case []int:
+		if len(v) != 8 {
+			return "", fmt.Errorf("ext_pan_id byte array must contain exactly 8 bytes (got %d)", len(v))
 		}
 		var b [8]byte
+		for i, elem := range v {
+			if elem < 0 || elem > 255 {
+				return "", fmt.Errorf("ext_pan_id byte at index %d out of range (0-255): %d", i, elem)
+			}
+			b[i] = byte(elem)
+		}
+		return "0x" + strings.ToUpper(hex.EncodeToString(b[:])), nil
+	case []any:
+		if len(v) != 8 {
+			return "", fmt.Errorf("ext_pan_id byte array must contain exactly 8 bytes (got %d)", len(v))
+		}
+		var b [8]byte
+		for i, elem := range v {
+			valInt, ok := toInt(elem)
+			if !ok || valInt < 0 || valInt > 255 {
+				return "", fmt.Errorf("invalid byte in ext_pan_id at index %d: %v", i, elem)
+			}
+			b[i] = byte(valInt)
+		}
+		return "0x" + strings.ToUpper(hex.EncodeToString(b[:])), nil
+	default:
+		return "", fmt.Errorf("unsupported ext_pan_id type %T", val)
+	}
+}
+
+// ParseNetworkKey converts a hex string, 16-byte array/slice, or "generate" token into a 32-char hex Network Key.
+func ParseNetworkKey(val any) (string, error) {
+	switch v := val.(type) {
+	case string:
+		valStr := strings.TrimSpace(v)
+		if strings.EqualFold(valStr, "generate") {
+			var b [16]byte
+			_, _ = rand.Read(b[:])
+			return strings.ToUpper(hex.EncodeToString(b[:])), nil
+		}
+		clean := valStr
+		if strings.HasPrefix(strings.ToLower(clean), "0x") {
+			clean = clean[2:]
+		}
+		if len(clean) != 32 {
+			return "", fmt.Errorf("network_key must be 32 hex characters (got %d)", len(clean))
+		}
+		if _, err := hex.DecodeString(clean); err != nil {
+			return "", fmt.Errorf("invalid hex network_key '%s': %w", valStr, err)
+		}
+		return strings.ToUpper(clean), nil
+	case []byte:
+		if len(v) != 16 {
+			return "", fmt.Errorf("network_key byte array must contain exactly 16 bytes (got %d)", len(v))
+		}
+		return strings.ToUpper(hex.EncodeToString(v)), nil
+	case []int:
+		if len(v) != 16 {
+			return "", fmt.Errorf("network_key byte array must contain exactly 16 bytes (got %d)", len(v))
+		}
+		var b [16]byte
+		for i, elem := range v {
+			if elem < 0 || elem > 255 {
+				return "", fmt.Errorf("network_key byte at index %d out of range (0-255): %d", i, elem)
+			}
+			b[i] = byte(elem)
+		}
+		return strings.ToUpper(hex.EncodeToString(b[:])), nil
+	case []any:
+		if len(v) != 16 {
+			return "", fmt.Errorf("network_key byte array must contain exactly 16 bytes (got %d)", len(v))
+		}
+		var b [16]byte
+		for i, elem := range v {
+			valInt, ok := toInt(elem)
+			if !ok || valInt < 0 || valInt > 255 {
+				return "", fmt.Errorf("invalid byte in network_key at index %d: %v", i, elem)
+			}
+			b[i] = byte(valInt)
+		}
+		return strings.ToUpper(hex.EncodeToString(b[:])), nil
+	default:
+		return "", fmt.Errorf("unsupported network_key type %T", val)
+	}
+}
+
+func toInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case uint64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	default:
+		return 0, false
+	}
+}
+
+func parsePanIDNode(node *yaml.Node) (uint16, error) {
+	if node.Kind != yaml.ScalarNode {
+		return 0, fmt.Errorf("pan_id must be an integer or hex string, got node kind %d", node.Kind)
+	}
+	return ParsePanID(node.Value)
+}
+
+func parseExtPanIDNode(node *yaml.Node) (string, error) {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		return ParseExtPanID(node.Value)
+	case yaml.SequenceNode:
+		var bytes []byte
 		for i, elem := range node.Content {
 			var val int
 			if err := elem.Decode(&val); err != nil {
@@ -177,9 +329,9 @@ func parseExtPanIDNode(node *yaml.Node) (string, error) {
 			if val < 0 || val > 255 {
 				return "", fmt.Errorf("ext_pan_id byte at index %d out of range (0-255): %d", i, val)
 			}
-			b[i] = byte(val)
+			bytes = append(bytes, byte(val))
 		}
-		return "0x" + strings.ToUpper(hex.EncodeToString(b[:])), nil
+		return ParseExtPanID(bytes)
 	default:
 		return "", fmt.Errorf("ext_pan_id must be a hex string or an 8-byte array, got node kind %d", node.Kind)
 	}
@@ -188,18 +340,9 @@ func parseExtPanIDNode(node *yaml.Node) (string, error) {
 func parseNetworkKeyNode(node *yaml.Node) (string, error) {
 	switch node.Kind {
 	case yaml.ScalarNode:
-		valStr := strings.TrimSpace(node.Value)
-		if strings.EqualFold(valStr, "generate") {
-			var b [16]byte
-			_, _ = rand.Read(b[:])
-			return strings.ToUpper(hex.EncodeToString(b[:])), nil
-		}
-		return valStr, nil
+		return ParseNetworkKey(node.Value)
 	case yaml.SequenceNode:
-		if len(node.Content) != 16 {
-			return "", fmt.Errorf("network_key byte array must contain exactly 16 bytes (got %d)", len(node.Content))
-		}
-		var b [16]byte
+		var bytes []byte
 		for i, elem := range node.Content {
 			var val int
 			if err := elem.Decode(&val); err != nil {
@@ -208,9 +351,9 @@ func parseNetworkKeyNode(node *yaml.Node) (string, error) {
 			if val < 0 || val > 255 {
 				return "", fmt.Errorf("network_key byte at index %d out of range (0-255): %d", i, val)
 			}
-			b[i] = byte(val)
+			bytes = append(bytes, byte(val))
 		}
-		return strings.ToUpper(hex.EncodeToString(b[:])), nil
+		return ParseNetworkKey(bytes)
 	default:
 		return "", fmt.Errorf("network_key must be a hex string or a 16-byte array, got node kind %d", node.Kind)
 	}
@@ -218,46 +361,46 @@ func parseNetworkKeyNode(node *yaml.Node) (string, error) {
 
 // NetworkConfig defines mesh network behaviors.
 type NetworkConfig struct {
-	PermitJoinDuration uint8 `yaml:"permit_join_duration"` // Default duration in seconds (254 = max, 0 = off)
-	PermitJoinOnStart  bool  `yaml:"permit_join_on_start"` // Automatically open joining at startup
+	PermitJoinDuration uint8 `yaml:"permit_join_duration" mapstructure:"permit_join_duration"` // Default duration in seconds (254 = max, 0 = off)
+	PermitJoinOnStart  bool  `yaml:"permit_join_on_start" mapstructure:"permit_join_on_start"`   // Automatically open joining at startup
 }
 
 // MQTTConfig defines MQTT broker settings and Home Assistant discovery.
 type MQTTConfig struct {
-	Enabled           bool          `yaml:"enabled"`
-	Broker            string        `yaml:"broker"` // e.g. "tcp://127.0.0.1:1883"
-	ClientID          string        `yaml:"client_id"`
-	Username          string        `yaml:"username"`
-	Password          string        `yaml:"password"`
-	BaseTopic         string        `yaml:"base_topic"`          // Default: "zigbridge"
-	HADiscovery       bool          `yaml:"ha_discovery"`        // Enable Home Assistant auto-discovery
-	HADiscoveryPrefix string        `yaml:"ha_discovery_prefix"` // Default: "homeassistant"
-	Retain            bool          `yaml:"retain"`
-	QoS               byte          `yaml:"qos"`
-	ConnectionTimeout time.Duration `yaml:"connection_timeout"`
+	Enabled           bool          `yaml:"enabled" mapstructure:"enabled"`
+	Broker            string        `yaml:"broker" mapstructure:"broker"` // e.g. "tcp://127.0.0.1:1883"
+	ClientID          string        `yaml:"client_id" mapstructure:"client_id"`
+	Username          string        `yaml:"username" mapstructure:"username"`
+	Password          string        `yaml:"password" mapstructure:"password"`
+	BaseTopic         string        `yaml:"base_topic" mapstructure:"base_topic"`                   // Default: "zigbridge"
+	HADiscovery       bool          `yaml:"ha_discovery" mapstructure:"ha_discovery"`               // Enable Home Assistant auto-discovery
+	HADiscoveryPrefix string        `yaml:"ha_discovery_prefix" mapstructure:"ha_discovery_prefix"` // Default: "homeassistant"
+	Retain            bool          `yaml:"retain" mapstructure:"retain"`
+	QoS               byte          `yaml:"qos" mapstructure:"qos"`
+	ConnectionTimeout time.Duration `yaml:"connection_timeout" mapstructure:"connection_timeout"`
 }
 
 // WebConfig defines the embedded web dashboard and REST/WebSocket API server.
 type WebConfig struct {
-	ListenAddr string `yaml:"listen_addr"` // e.g. "0.0.0.0:8080"
-	EnableCORS bool   `yaml:"enable_cors"`
+	ListenAddr string `yaml:"listen_addr" mapstructure:"listen_addr"` // e.g. "0.0.0.0:8080"
+	EnableCORS bool   `yaml:"enable_cors" mapstructure:"enable_cors"`
 }
 
 // AIConfig defines the direct binding and scene recommendation engine settings.
 type AIConfig struct {
-	Enabled          bool          `yaml:"enabled"`
-	Engine           string        `yaml:"engine"`            // "rule_based" or "external_llm"
-	AnalysisInterval time.Duration `yaml:"analysis_interval"` // e.g. "5m"
-	MinConfidence    float64       `yaml:"min_confidence"`    // 0.0 - 1.0 threshold for auto-proposals
-	MaxEventHistory  int           `yaml:"max_event_history"` // Max events retained in ring buffer
-	LLMEndpoint      string        `yaml:"llm_endpoint"`      // Optional endpoint for local or cloud LLM
-	LLMAPIKey        string        `yaml:"llm_api_key"`       // Optional API key for LLM
+	Enabled          bool          `yaml:"enabled" mapstructure:"enabled"`
+	Engine           string        `yaml:"engine" mapstructure:"engine"`                       // "rule_based" or "external_llm"
+	AnalysisInterval time.Duration `yaml:"analysis_interval" mapstructure:"analysis_interval"` // e.g. "5m"
+	MinConfidence    float64       `yaml:"min_confidence" mapstructure:"min_confidence"`       // 0.0 - 1.0 threshold for auto-proposals
+	MaxEventHistory  int           `yaml:"max_event_history" mapstructure:"max_event_history"` // Max events retained in ring buffer
+	LLMEndpoint      string        `yaml:"llm_endpoint" mapstructure:"llm_endpoint"`           // Optional endpoint for local or cloud LLM
+	LLMAPIKey        string        `yaml:"llm_api_key" mapstructure:"llm_api_key"`             // Optional API key for LLM
 }
 
 // StorageConfig defines data persistence and runtime state directory settings.
 type StorageConfig struct {
-	DevicesPath string        `yaml:"devices_path"`      // e.g. "data/devices.yaml"
-	Debounce    time.Duration `yaml:"debounce_interval"` // e.g. 2s
+	DevicesPath string        `yaml:"devices_path" mapstructure:"devices_path"`           // e.g. "data/devices.yaml"
+	Debounce    time.Duration `yaml:"debounce_interval" mapstructure:"debounce_interval"` // e.g. 2s
 }
 
 // Default returns a configuration populated with safe, production-grade defaults.
