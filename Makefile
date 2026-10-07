@@ -27,10 +27,23 @@ all: build
 webui:
 	@echo "==> Building web UI in webui/..."
 	@if [ -d "webui" ]; then \
-		if command -v npm >/dev/null 2>&1; then \
-			(cd webui && npm run build); \
+		if [ -d "webui/node_modules" ]; then \
+			if command -v npm >/dev/null 2>&1; then \
+				(cd webui && npm run build); \
+			elif command -v pnpm >/dev/null 2>&1; then \
+				(cd webui && pnpm build); \
+			fi; \
+		elif [ -d "webui/dist" ] && [ -n "$$(ls -A webui/dist 2>/dev/null)" ]; then \
+			echo "==> webui/node_modules not found; using pre-built webui/dist (run 'cd webui && npm install' to build from source)"; \
+		elif command -v npm >/dev/null 2>&1; then \
+			echo "==> Installing web UI dependencies..."; \
+			(cd webui && (npm ci || npm install) && npm run build); \
 		elif command -v pnpm >/dev/null 2>&1; then \
-			(cd webui && pnpm build); \
+			echo "==> Installing web UI dependencies..."; \
+			(cd webui && pnpm install && pnpm build); \
+		else \
+			echo "==> Error: webui/dist not found and neither npm nor pnpm is available" >&2; \
+			exit 1; \
 		fi; \
 	fi
 
