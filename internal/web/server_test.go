@@ -139,7 +139,7 @@ func TestWebStaticAssetsAndSPAFallback(t *testing.T) {
 	}
 
 	// Test 4b: Logo and Favicon static assets serving
-	for _, brandAsset := range []string{"/logo.png", "/favicon.png"} {
+	for _, brandAsset := range []string{"/logo.png", "/favicon.png", "/favicon.ico", "/favicon.svg", "/apple-touch-icon.png"} {
 		resp, err := http.Get(baseURL + brandAsset)
 		if err != nil {
 			t.Fatalf("failed to get brand asset %s: %v", brandAsset, err)
@@ -154,7 +154,7 @@ func TestWebStaticAssetsAndSPAFallback(t *testing.T) {
 	missingAssets := []string{
 		"/assets/nonexistent.js",
 		"/assets/missing.css",
-		"/favicon.ico",
+		"/nonexistent.ico",
 	}
 	for _, asset := range missingAssets {
 		r, err := http.Get(baseURL + asset)
