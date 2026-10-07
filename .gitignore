@@ -1,6 +1,6 @@
 # Binaries and build artifacts
-bin/
-dist/
+/bin/
+/dist/
 node_modules/
 *.exe
 *.exe~

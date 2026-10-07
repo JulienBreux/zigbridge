@@ -22,9 +22,21 @@ LDFLAGS := -s -w \
 .PHONY: all
 all: build
 
+## webui: Build the web frontend distribution (Vue 3 + Tailwind CSS)
+.PHONY: webui
+webui:
+	@echo "==> Building web UI in webui/..."
+	@if [ -d "webui" ]; then \
+		if command -v npm >/dev/null 2>&1; then \
+			(cd webui && npm run build); \
+		elif command -v pnpm >/dev/null 2>&1; then \
+			(cd webui && pnpm build); \
+		fi; \
+	fi
+
 ## build: Build static single binary with zero external dependencies (CGO_ENABLED=0)
 .PHONY: build
-build:
+build: webui
 	@echo "==> Building static binary $(BIN_DIR)/$(BINARY_NAME) (CGO_ENABLED=0)..."
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_SRC)
@@ -32,7 +44,7 @@ build:
 
 ## cross-compile: Build static binaries for Linux, macOS, and Windows
 .PHONY: cross-compile
-cross-compile:
+cross-compile: webui
 	@echo "==> Cross-compiling static binaries..."
 	@mkdir -p $(BIN_DIR)
 	# Linux x86_64

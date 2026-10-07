@@ -77,10 +77,11 @@ A dedicated, full-page view providing live radio telemetry, mesh network configu
 ---
 
 ## Zero-CDN Offline Architecture
+ 
+The frontend is built with Vue 3, TypeScript, and Tailwind CSS in `webui/`:
+- `webui/src/` (Modern Vue 3 Composition API SFCs with TypeScript)
+- `webui/src/style.css` (Tailwind CSS utilities with dark mode support)
+- `webui/src/composables/` (Type-safe API and WebSocket client composables)
+- `webui/dist/` (Compiled static distribution embedded via Go `embed.FS`)
 
-The frontend consists of:
-- `internal/web/static/index.html` (Semantic HTML5)
-- `internal/web/static/style.css` (Clean CSS with dark-mode aesthetic, zero CSS frameworks)
-- `internal/web/static/app.js` (Vanilla ES6 JavaScript, zero npm packages)
-
-Because all assets are compiled into the binary via `embed.FS`, the dashboard loads instantaneously and operates 100% offline without contacting external CDNs or Google Fonts.
+Because all distribution assets are compiled into the binary via `embed.FS`, the dashboard loads instantaneously and operates 100% offline without contacting external CDNs or external fonts.

@@ -3,7 +3,6 @@ package web
 import (
 	"cmp"
 	"context"
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,7 +10,9 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/http"
+	"path"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,10 +22,8 @@ import (
 	"github.com/julienbreux/zigbridge/internal/controller"
 	"github.com/julienbreux/zigbridge/internal/fixture"
 	"github.com/julienbreux/zigbridge/internal/zcl"
+	"github.com/julienbreux/zigbridge/webui"
 )
-
-//go:embed static/*
-var staticFS embed.FS
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
@@ -48,7 +47,9 @@ type Server struct {
 	cfg        *config.WebConfig
 	controller *controller.Controller
 	httpServer *http.Server
-	listener   net.Listener
+	listener net.Listener
+	staticMu sync.RWMutex
+	staticFS fs.FS
 
 	clientsMu sync.RWMutex
 	clients   map[*websocket.Conn]struct{}
@@ -59,12 +60,27 @@ type Server struct {
 
 // NewServer creates a new web server bound to the controller.
 func NewServer(cfg *config.WebConfig, ctrl *controller.Controller) *Server {
+	dist, _ := webui.DistFS()
 	return &Server{
 		cfg:        cfg,
 		controller: ctrl,
+		staticFS:   dist,
 		clients:    make(map[*websocket.Conn]struct{}),
 		stopCh:     make(chan struct{}),
 	}
+}
+
+// SetStaticFS overrides the static assets filesystem (useful for testing or custom distribution).
+func (s *Server) SetStaticFS(staticFS fs.FS) {
+	s.staticMu.Lock()
+	s.staticFS = staticFS
+	s.staticMu.Unlock()
+}
+
+func (s *Server) getStaticFS() fs.FS {
+	s.staticMu.RLock()
+	defer s.staticMu.RUnlock()
+	return s.staticFS
 }
 
 // Start launches the HTTP server and event forwarding goroutine.
@@ -136,21 +152,46 @@ func (s *Server) Addr() net.Addr {
 }
 
 func (s *Server) registerRoutes(mux *http.ServeMux) {
-	// Embedded static assets
-	sub, err := fs.Sub(staticFS, "static")
-	if err == nil {
-		fileServer := http.FileServer(http.FS(sub))
-		mux.Handle("GET /static/", http.StripPrefix("/static/", fileServer))
-		mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/" || r.URL.Path == "/index.html" {
-				r.URL.Path = "/"
+	// Embedded static assets and SPA fallback
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"endpoint not found"}`))
+			return
+		}
+
+		staticFS := s.getStaticFS()
+		if staticFS == nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		fileServer := http.FileServer(http.FS(staticFS))
+		cleanPath := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		if cleanPath == "" || cleanPath == "." || cleanPath == "index.html" {
+			r.URL.Path = "/"
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		if f, err := staticFS.Open(cleanPath); err == nil {
+			stat, statErr := f.Stat()
+			_ = f.Close()
+			if statErr == nil && !stat.IsDir() {
 				fileServer.ServeHTTP(w, r)
 				return
 			}
-			// Attempt to serve asset; if missing fallback to index.html
-			fileServer.ServeHTTP(w, r)
-		})
-	}
+		}
+
+		if strings.HasPrefix(r.URL.Path, "/assets/") || strings.HasSuffix(r.URL.Path, ".ico") {
+			http.NotFound(w, r)
+			return
+		}
+
+		r.URL.Path = "/"
+		fileServer.ServeHTTP(w, r)
+	})
 
 	// REST APIs
 	mux.HandleFunc("GET /api/status", s.handleStatus)

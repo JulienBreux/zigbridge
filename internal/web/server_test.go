@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -22,6 +24,7 @@ import (
 	"github.com/julienbreux/zigbridge/internal/transport"
 	"github.com/julienbreux/zigbridge/internal/web"
 	"github.com/julienbreux/zigbridge/internal/zcl"
+	"github.com/julienbreux/zigbridge/webui"
 )
 
 func setupTestServerWithConfig(t *testing.T, cfg *config.Config) (*web.Server, *controller.Controller, string) {
@@ -63,9 +66,10 @@ func setupTestServer(t *testing.T) (*web.Server, *controller.Controller, string)
 	return setupTestServerWithConfig(t, cfg)
 }
 
-func TestWebStaticAssets(t *testing.T) {
-	_, _, baseURL := setupTestServer(t)
+func TestWebStaticAssetsAndSPAFallback(t *testing.T) {
+	srv, _, baseURL := setupTestServer(t)
 
+	// Test 1: Root path serves index.html
 	resp, err := http.Get(baseURL + "/")
 	if err != nil {
 		t.Fatalf("failed to get root: %v", err)
@@ -73,12 +77,124 @@ func TestWebStaticAssets(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected 200 OK, got %d", resp.StatusCode)
+		t.Errorf("expected 200 OK for '/', got %d", resp.StatusCode)
 	}
-
 	body, _ := io.ReadAll(resp.Body)
 	if !strings.Contains(string(body), "Zigbridge") {
 		t.Errorf("expected index.html to contain 'Zigbridge'")
+	}
+
+	// Test 2: Direct index.html request
+	respIndex, err := http.Get(baseURL + "/index.html")
+	if err != nil {
+		t.Fatalf("failed to get /index.html: %v", err)
+	}
+	defer func() { _ = respIndex.Body.Close() }()
+	if respIndex.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 OK for '/index.html', got %d", respIndex.StatusCode)
+	}
+
+	// Test 3: SPA client-side routes fallback to index.html
+	spaRoutes := []string{
+		"/devices",
+		"/devices/0x00124b0012345678",
+		"/bindings",
+		"/advance",
+		"/system",
+	}
+	for _, route := range spaRoutes {
+		r, err := http.Get(baseURL + route)
+		if err != nil {
+			t.Fatalf("failed to get %s: %v", route, err)
+		}
+		defer func() { _ = r.Body.Close() }()
+		if r.StatusCode != http.StatusOK {
+			t.Errorf("expected 200 OK for SPA route %s, got %d", route, r.StatusCode)
+		}
+		b, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(b), "Zigbridge") {
+			t.Errorf("expected %s to fallback to index.html containing 'Zigbridge'", route)
+		}
+	}
+
+	// Test 4: Actual static asset serving from dist/assets
+	dist, err := webui.DistFS()
+	if err != nil {
+		t.Fatalf("failed to load distFS: %v", err)
+	}
+	entries, err := fs.ReadDir(dist, "assets")
+	if err == nil && len(entries) > 0 {
+		assetPath := "/assets/" + entries[0].Name()
+		assetResp, err := http.Get(baseURL + assetPath)
+		if err != nil {
+			t.Fatalf("failed to get asset %s: %v", assetPath, err)
+		}
+		defer func() { _ = assetResp.Body.Close() }()
+		if assetResp.StatusCode != http.StatusOK {
+			t.Errorf("expected 200 OK for asset %s, got %d", assetPath, assetResp.StatusCode)
+		}
+	}
+
+	// Test 5: Missing asset or icon returns 404 (not falling back to index.html)
+	missingAssets := []string{
+		"/assets/nonexistent.js",
+		"/assets/missing.css",
+		"/favicon.ico",
+	}
+	for _, asset := range missingAssets {
+		r, err := http.Get(baseURL + asset)
+		if err != nil {
+			t.Fatalf("failed to get %s: %v", asset, err)
+		}
+		defer func() { _ = r.Body.Close() }()
+		if r.StatusCode != http.StatusNotFound {
+			t.Errorf("expected 404 Not Found for %s, got %d", asset, r.StatusCode)
+		}
+	}
+
+	// Test 6: Unmatched /api/* route returns 404 JSON, NOT falling back to index.html
+	apiRoutes := []string{
+		"/api",
+		"/api/",
+		"/api/nonexistent",
+		"/api/devices/nonexistent/unknown-action",
+	}
+	for _, apiRoute := range apiRoutes {
+		r, err := http.Get(baseURL + apiRoute)
+		if err != nil {
+			t.Fatalf("failed to get %s: %v", apiRoute, err)
+		}
+		defer func() { _ = r.Body.Close() }()
+		if r.StatusCode != http.StatusNotFound {
+			t.Errorf("expected 404 Not Found for %s, got %d", apiRoute, r.StatusCode)
+		}
+		contentType := r.Header.Get("Content-Type")
+		if !strings.Contains(contentType, "application/json") {
+			t.Errorf("expected application/json for unmatched API route %s, got %q", apiRoute, contentType)
+		}
+		b, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(b), `"error":"endpoint not found"`) {
+			t.Errorf("expected JSON error for %s, got: %s", apiRoute, string(b))
+		}
+	}
+
+	// Test 7: Custom static FS override using SetStaticFS
+	customFS := fstest.MapFS{
+		"index.html": &fstest.MapFile{Data: []byte("<html>Custom Zigbridge</html>")},
+		"test.txt":   &fstest.MapFile{Data: []byte("hello world")},
+	}
+	srv.SetStaticFS(customFS)
+	customResp, err := http.Get(baseURL + "/test.txt")
+	if err != nil {
+		t.Fatalf("failed to get /test.txt: %v", err)
+	}
+	defer func() { _ = customResp.Body.Close() }()
+	if customResp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 OK for custom static file, got %d", customResp.StatusCode)
+	}
+	customBody, _ := io.ReadAll(customResp.Body)
+	if string(customBody) != "hello world" {
+		t.Errorf("expected 'hello world', got %q", string(customBody))
 	}
 }
 

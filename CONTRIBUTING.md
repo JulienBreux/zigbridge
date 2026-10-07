@@ -91,8 +91,8 @@ All code submitted to Zigbridge must adhere to these foundational principles:
 - Distribute events asynchronously across WebSockets and MQTT using non-blocking buffered Go channels so slow consumers never stall radio frame processing.
 
 ### 3. Offline-First & Zero-CDN Web UI
-- The embedded web dashboard (`internal/web/static/` via `embed.FS`) must remain **100% functional offline**.
-- **No external CDN dependencies** (no CDN CSS frameworks, no Google Fonts, no third-party JS scripts).
+- The embedded web dashboard (`webui/dist/` via `embed.FS`) must remain **100% functional offline**.
+- **No external CDN dependencies** (no CDN CSS frameworks, no external fonts, no third-party JS scripts).
 
 ### 4. Modern Go Standards (Go 1.21 – 1.27+)
 - Use `errors.Is(err, ...)` and `errors.As(err, &target)`. Never use direct `err == ...` comparisons on wrapped errors.
