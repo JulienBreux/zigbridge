@@ -108,6 +108,21 @@ export function useRouter() {
     navigateTo('devices', ieee, replace)
   }
 
+  function navigateToHome(replace = false) {
+    const targetPath = '/'
+    const currentPath = window.location.pathname
+
+    if (targetPath !== currentPath || (window.location.hash && window.location.hash !== '')) {
+      if (replace) {
+        window.history.replaceState(null, '', targetPath)
+      } else {
+        window.history.pushState(null, '', targetPath)
+      }
+    }
+
+    currentRoute.value = { tab: 'devices', deviceIeee: null }
+  }
+
   function syncFromLocation(): RouteState {
     const parsed = parseRoute(window.location.pathname, window.location.hash)
 
@@ -149,6 +164,7 @@ export function useRouter() {
     navigateTo,
     navigateToTab,
     navigateToDevice,
+    navigateToHome,
     syncFromLocation,
     initRouter,
   }

@@ -54,6 +54,7 @@ const {
   getRoutePath,
   navigateToTab,
   navigateToDevice,
+  navigateToHome: routerNavigateToHome,
   initRouter,
 } = useRouter()
 
@@ -180,6 +181,25 @@ function navigateToDevices() {
   currentDetailDefinition.value = null
   navigateToTab('devices')
   loadDevices()
+}
+
+function navigateToHome() {
+  showPermitJoin.value = false
+  showRename.value = false
+  showCreateBinding.value = false
+  showSpawnDevice.value = false
+  currentDetailDevice.value = null
+  currentDetailDefinition.value = null
+  routerNavigateToHome()
+  loadDevices()
+}
+
+function onNavigateHome(event: MouseEvent) {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+    return
+  }
+  event.preventDefault()
+  navigateToHome()
 }
 
 function switchTab(tabId: TabId) {
@@ -451,7 +471,7 @@ onUnmounted(() => {
 <template>
   <div class="min-h-screen flex flex-col bg-gray-50 dark:bg-[#0d1117] text-gray-900 dark:text-gray-100 transition-colors duration-200">
     <!-- Header -->
-    <AppHeader :status="status" />
+    <AppHeader :status="status" @navigate-home="onNavigateHome" />
 
     <!-- Navigation Tabs -->
     <nav class="bg-white dark:bg-[#161b22] border-b border-gray-200 dark:border-[#30363d] px-6 transition-colors">

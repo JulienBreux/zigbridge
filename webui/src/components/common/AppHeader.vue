@@ -8,7 +8,15 @@ const props = defineProps<{
   status: StatusResponse | null
 }>()
 
+const emit = defineEmits<{
+  (e: 'navigate-home', event: MouseEvent): void
+}>()
+
 const { mode, isDark, toggleMode, toggleTheme } = useMode()
+
+function onBrandClick(event: MouseEvent) {
+  emit('navigate-home', event)
+}
 
 const isCoordinatorOnline = computed(() => {
   return Boolean(
@@ -38,11 +46,16 @@ const isMqttOnline = computed(() => Boolean(props.status?.mqtt_connected))
   >
     <div class="max-w-[1300px] mx-auto flex items-center justify-between flex-wrap gap-4">
       <!-- Brand -->
-      <div class="flex items-center gap-3">
-        <h1 class="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">
+      <a
+        href="/"
+        class="flex items-center gap-3 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm"
+        title="Zigbridge - Home"
+        @click="onBrandClick"
+      >
+        <h1 class="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
           Zigbridge
         </h1>
-      </div>
+      </a>
 
       <!-- Status & Controls -->
       <div class="flex items-center gap-3 flex-wrap">
