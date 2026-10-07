@@ -48,10 +48,15 @@ const isMqttOnline = computed(() => Boolean(props.status?.mqtt_connected))
       <!-- Brand -->
       <a
         href="/"
-        class="flex items-center gap-3 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm"
+        class="flex items-center gap-2.5 group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm"
         title="ZigBridge - Home"
         @click="onBrandClick"
       >
+        <img
+          src="/logo.png"
+          alt="ZigBridge"
+          class="w-7 h-7 object-contain rounded select-none"
+        />
         <h1 class="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
           ZigBridge
         </h1>

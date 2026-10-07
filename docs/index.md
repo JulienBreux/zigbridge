@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="ZigBridge Logo" width="128" height="128" />
+</p>
+
 # ZigBridge Documentation
 
 Welcome to the official documentation for **ZigBridge**, the lightweight Zigbee-to-MQTT bridge and Direct Binding Orchestrator written in Go.

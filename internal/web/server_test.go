@@ -138,6 +138,18 @@ func TestWebStaticAssetsAndSPAFallback(t *testing.T) {
 		}
 	}
 
+	// Test 4b: Logo and Favicon static assets serving
+	for _, brandAsset := range []string{"/logo.png", "/favicon.png"} {
+		resp, err := http.Get(baseURL + brandAsset)
+		if err != nil {
+			t.Fatalf("failed to get brand asset %s: %v", brandAsset, err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("expected 200 OK for %s, got %d", brandAsset, resp.StatusCode)
+		}
+	}
+
 	// Test 5: Missing asset or icon returns 404 (not falling back to index.html)
 	missingAssets := []string{
 		"/assets/nonexistent.js",
