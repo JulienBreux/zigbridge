@@ -100,7 +100,10 @@ func TestWebStaticAssetsAndSPAFallback(t *testing.T) {
 		"/devices/0x00124b0012345678",
 		"/bindings",
 		"/advance",
+		"/suggestions",
+		"/activity",
 		"/system",
+		"/simulation",
 	}
 	for _, route := range spaRoutes {
 		r, err := http.Get(baseURL + route)

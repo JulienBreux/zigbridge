@@ -13,6 +13,7 @@ import type {
 } from '@/types'
 import { useZigbridgeApi } from '@/composables/useZigbridgeApi'
 import { useZigbridgeWs } from '@/composables/useZigbridgeWs'
+import { useRouter } from '@/composables/useRouter'
 import { sortDevicesByFriendlyName } from '@/utils/formatters'
 
 // Common UI
@@ -46,11 +47,19 @@ const bindings = ref<Binding[]>([])
 const recommendations = ref<Recommendation[]>([])
 const virtualDevices = ref<VirtualDeviceSummary[]>([])
 
-// Active tab and navigation
-const activeTab = ref<TabId>('devices')
-const currentDetailIeee = ref<string | null>(null)
+// Router and navigation
+const {
+  activeTab,
+  currentDeviceIeee,
+  getRoutePath,
+  navigateToTab,
+  navigateToDevice,
+  initRouter,
+} = useRouter()
+
 const currentDetailDevice = ref<Device | null>(null)
 const currentDetailDefinition = ref<DeviceDefinition | null>(null)
+let cleanupRouter: (() => void) | null = null
 
 // Feed & logs
 const activityItems = ref<ActivityItem[]>([])
@@ -140,11 +149,18 @@ async function loadRecommendations() {
   }
 }
 
+function loadTabData(tabId: TabId) {
+  if (tabId === 'devices') loadDevices()
+  else if (tabId === 'bindings') loadBindings()
+  else if (tabId === 'diagnostics') loadStatus()
+  else if (tabId === 'simulation') loadSimulationLab()
+  else if (tabId === 'ai') loadRecommendations()
+}
+
 // Device Detail Navigation
 async function loadDeviceDetail(ieee: string) {
   try {
     const data = await api.getDeviceDetail(ieee)
-    currentDetailIeee.value = ieee
     currentDetailDevice.value = data.device
     currentDetailDefinition.value = data.definition || null
   } catch (err: any) {
@@ -155,51 +171,30 @@ async function loadDeviceDetail(ieee: string) {
 }
 
 function openDeviceDetail(ieee: string) {
-  window.location.hash = `#/devices/${encodeURIComponent(ieee)}`
+  navigateToDevice(ieee)
   loadDeviceDetail(ieee)
 }
 
 function navigateToDevices() {
-  if (window.location.hash.startsWith('#/devices/')) {
-    history.replaceState(null, '', window.location.pathname + window.location.search)
-  }
-  currentDetailIeee.value = null
   currentDetailDevice.value = null
   currentDetailDefinition.value = null
-  activeTab.value = 'devices'
+  navigateToTab('devices')
   loadDevices()
 }
 
-function handleRoute() {
-  const hash = window.location.hash || ''
-  if (hash.startsWith('#/devices/')) {
-    const ieee = decodeURIComponent(hash.substring('#/devices/'.length))
-    if (ieee) {
-      loadDeviceDetail(ieee)
-      return
-    }
-  }
-
-  // Not on device detail
-  currentDetailIeee.value = null
+function switchTab(tabId: TabId) {
   currentDetailDevice.value = null
   currentDetailDefinition.value = null
+  navigateToTab(tabId)
+  loadTabData(tabId)
 }
 
-function switchTab(tabId: TabId) {
-  if (window.location.hash.startsWith('#/devices/')) {
-    history.replaceState(null, '', window.location.pathname + window.location.search)
+function onTabClick(event: MouseEvent, tabId: TabId) {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+    return
   }
-  currentDetailIeee.value = null
-  currentDetailDevice.value = null
-  currentDetailDefinition.value = null
-  activeTab.value = tabId
-
-  if (tabId === 'devices') loadDevices()
-  else if (tabId === 'bindings') loadBindings()
-  else if (tabId === 'diagnostics') loadStatus()
-  else if (tabId === 'simulation') loadSimulationLab()
-  else if (tabId === 'ai') loadRecommendations()
+  event.preventDefault()
+  switchTab(tabId)
 }
 
 // Activity feed and log console
@@ -397,9 +392,10 @@ function onAiApplied() {
 }
 
 async function refreshDetailDevice() {
-  if (!currentDetailIeee.value) return
+  const ieee = currentDeviceIeee.value
+  if (!ieee) return
   try {
-    const data = await api.getDeviceDetail(currentDetailIeee.value)
+    const data = await api.getDeviceDetail(ieee)
     currentDetailDevice.value = data.device
     currentDetailDefinition.value = data.definition || null
   } catch (err) {
@@ -412,21 +408,29 @@ watch(
   () => status.value?.ai_enabled,
   (enabled) => {
     if (enabled === false && activeTab.value === 'ai') {
-      switchTab('devices')
+      navigateToTab('devices', true)
+      loadDevices()
     }
   }
 )
 
 // Lifecycle
 onMounted(() => {
-  // Load initial state
+  // Load initial status and data
   loadStatus()
   loadDevices()
   loadBindings()
 
-  // Hash routing
-  window.addEventListener('hashchange', handleRoute)
-  handleRoute()
+  // Initialize router and listen to popstate/hashchange events
+  cleanupRouter = initRouter((route) => {
+    if (route.deviceIeee) {
+      loadDeviceDetail(route.deviceIeee)
+    } else {
+      currentDetailDevice.value = null
+      currentDetailDefinition.value = null
+      loadTabData(route.tab)
+    }
+  })
 
   // Polling every 3s
   pollTimer = setInterval(loadStatus, 3000)
@@ -439,7 +443,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
-  window.removeEventListener('hashchange', handleRoute)
+  if (cleanupRouter) cleanupRouter()
   if (removeWsListener) removeWsListener()
 })
 </script>
@@ -453,15 +457,15 @@ onUnmounted(() => {
     <nav class="bg-white dark:bg-[#161b22] border-b border-gray-200 dark:border-[#30363d] px-6 transition-colors">
       <div class="max-w-[1300px] mx-auto flex items-center space-x-1 sm:space-x-2 overflow-x-auto">
         <!-- Devices Tab -->
-        <button
-          type="button"
+        <a
+          :href="getRoutePath('devices')"
           :class="[
-            'group inline-flex items-center gap-2 py-3 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+            'group inline-flex items-center gap-2 py-3 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer',
             activeTab === 'devices' && !currentDetailDevice
               ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
               : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
           ]"
-          @click="switchTab('devices')"
+          @click="onTabClick($event, 'devices')"
         >
           <span>Devices</span>
           <span
@@ -474,18 +478,18 @@ onUnmounted(() => {
           >
             {{ deviceCount }}
           </span>
-        </button>
+        </a>
 
         <!-- Bindings Tab -->
-        <button
-          type="button"
+        <a
+          :href="getRoutePath('bindings')"
           :class="[
-            'group inline-flex items-center gap-2 py-3 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+            'group inline-flex items-center gap-2 py-3 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer',
             activeTab === 'bindings' && !currentDetailDevice
               ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
               : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
           ]"
-          @click="switchTab('bindings')"
+          @click="onTabClick($event, 'bindings')"
         >
           <span>Bindings</span>
           <span
@@ -498,19 +502,19 @@ onUnmounted(() => {
           >
             {{ bindingCount }}
           </span>
-        </button>
+        </a>
 
         <!-- Smart Suggestions (AI) Tab -->
-        <button
+        <a
           v-if="showAiTab"
-          type="button"
+          :href="getRoutePath('ai')"
           :class="[
-            'group inline-flex items-center gap-2 py-3 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+            'group inline-flex items-center gap-2 py-3 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer',
             activeTab === 'ai' && !currentDetailDevice
               ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
               : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
           ]"
-          @click="switchTab('ai')"
+          @click="onTabClick($event, 'ai')"
         >
           <span>Suggestions</span>
           <span
@@ -524,47 +528,47 @@ onUnmounted(() => {
           >
             {{ recCount }}
           </span>
-        </button>
+        </a>
 
         <!-- Activity Tab -->
-        <button
-          type="button"
+        <a
+          :href="getRoutePath('events')"
           :class="[
-            'group inline-flex items-center gap-2 py-3 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+            'group inline-flex items-center gap-2 py-3 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer',
             activeTab === 'events' && !currentDetailDevice
               ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
               : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
           ]"
-          @click="switchTab('events')"
+          @click="onTabClick($event, 'events')"
         >
           <span>Activity</span>
-        </button>
+        </a>
 
         <!-- System (Diagnostics) Tab -->
-        <button
-          type="button"
+        <a
+          :href="getRoutePath('diagnostics')"
           :class="[
-            'group inline-flex items-center gap-2 py-3 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+            'group inline-flex items-center gap-2 py-3 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer',
             activeTab === 'diagnostics' && !currentDetailDevice
               ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
               : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
           ]"
-          @click="switchTab('diagnostics')"
+          @click="onTabClick($event, 'diagnostics')"
         >
           <span>System</span>
-        </button>
+        </a>
 
         <!-- Simulation Lab Tab (Only for mock coordinator) -->
-        <button
+        <a
           v-if="showSimulationTab"
-          type="button"
+          :href="getRoutePath('simulation')"
           :class="[
-            'group inline-flex items-center gap-2 py-3 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+            'group inline-flex items-center gap-2 py-3 px-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer',
             activeTab === 'simulation' && !currentDetailDevice
               ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
               : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
           ]"
-          @click="switchTab('simulation')"
+          @click="onTabClick($event, 'simulation')"
         >
           <span>Simulation</span>
           <span
@@ -578,7 +582,7 @@ onUnmounted(() => {
           >
             {{ simCount }}
           </span>
-        </button>
+        </a>
       </div>
     </nav>
 
